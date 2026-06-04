@@ -3,6 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -100,7 +101,7 @@ export default function Reports() {
   }, [allDeals, user]);
 
   const exportCSV = () => {
-    const filename = `עסקאות_${selectedMonth !== 'all' ? selectedMonth : 'כולל'}.csv`;
+    const filename = `עסקאות_${datePreset !== 'all' ? datePreset : 'כולל'}.csv`;
     downloadCSV(filename, deals, {
       month: 'חודש',
       client_name: 'לקוח',
@@ -227,7 +228,7 @@ export default function Reports() {
       </div>
 
       {/* Admin: agent summary table */}
-      {isAdmin(user) && selectedAgent === 'all' && selectedMonth === 'all' && (
+      {isAdmin(user) && selectedAgent === 'all' && datePreset === 'all' && (
         <Card className="rounded-2xl overflow-hidden">
           <CardHeader><CardTitle className="text-base">סיכום לפי סוכן</CardTitle></CardHeader>
           <div className="overflow-x-auto">
