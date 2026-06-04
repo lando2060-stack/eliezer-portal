@@ -187,7 +187,7 @@ export default function UploadReceipt() {
   };
 
   return (
-    <div className="max-w-7xl space-y-6">
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">העלאת קבלה</h1>
         <p className="text-muted-foreground text-sm mt-1">צלם או העלה קבלה לסריקה אוטומטית</p>

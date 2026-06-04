@@ -6,7 +6,7 @@ export default function AppLayout() {
   return (
     <div className="min-h-screen bg-background">
       <main className="pb-20">
-        <div className="p-4 pt-6 max-w-7xl mx-auto">
+        <div className="px-4 pt-6 w-full max-w-5xl mx-auto">
           <Outlet />
         </div>
       </main>

@@ -69,7 +69,7 @@ export default function Expenses() {
   const totalFiltered = filtered.reduce((s, e) => s + (e.total_amount || 0), 0);
 
   return (
-    <div className="max-w-7xl space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">קבלות והוצאות</h1>

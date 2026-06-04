@@ -66,7 +66,7 @@ export default function Deals() {
   const totalCollected = filtered.reduce((s, d) => s + (d.collected_actual || 0), 0);
 
   return (
-    <div className="max-w-7xl space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">עסקאות</h1>

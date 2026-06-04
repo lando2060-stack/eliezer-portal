@@ -53,7 +53,7 @@ export default function Anomalies() {
   });
 
   return (
-    <div className="max-w-6xl space-y-6">
+    <div className="space-y-6">
       <div className="flex items-center gap-3">
         <div className="p-2.5 bg-amber-100 rounded-xl"><AlertTriangle className="w-5 h-5 text-amber-600" /></div>
         <div>

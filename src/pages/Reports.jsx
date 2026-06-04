@@ -152,7 +152,7 @@ export default function Reports() {
   };
 
   return (
-    <div className="max-w-7xl space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h1 className="text-2xl font-bold">הכנסות ועמלות</h1>
         <div className="flex gap-2 flex-wrap">

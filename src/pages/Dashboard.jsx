@@ -89,7 +89,7 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="max-w-5xl space-y-6">
+    <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-3 mb-1">

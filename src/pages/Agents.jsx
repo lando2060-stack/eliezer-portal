@@ -49,7 +49,7 @@ export default function Agents() {
   const upd = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   return (
-    <div className="max-w-5xl space-y-6">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">סוכנים</h1>
