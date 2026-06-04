@@ -1,0 +1,122 @@
+{
+  "name": "Expense",
+  "type": "object",
+  "properties": {
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "\u05ea\u05d0\u05e8\u05d9\u05da"
+    },
+    "vendor_name": {
+      "type": "string",
+      "description": "\u05e9\u05dd \u05e1\u05e4\u05e7"
+    },
+    "vendor_tax_id": {
+      "type": "string",
+      "description": "\u05d7.\u05e4 / \u05de\u05e1\u05e4\u05e8 \u05e2\u05d5\u05e1\u05e7 \u05de\u05d5\u05e8\u05e9\u05d4"
+    },
+    "total_amount": {
+      "type": "number",
+      "description": "\u05e1\u05db\u05d5\u05dd \u05db\u05d5\u05dc\u05dc"
+    },
+    "amount_before_vat": {
+      "type": "number",
+      "description": "\u05e1\u05db\u05d5\u05dd \u05dc\u05e4\u05e0\u05d9 \u05de\u05e2\u05f4\u05de"
+    },
+    "vat_amount": {
+      "type": "number",
+      "description": "\u05e1\u05db\u05d5\u05dd \u05de\u05e2\u05f4\u05de"
+    },
+    "currency": {
+      "type": "string",
+      "enum": [
+        "ILS",
+        "USD",
+        "EUR",
+        "GBP"
+      ],
+      "default": "ILS"
+    },
+    "category": {
+      "type": "string",
+      "description": "\u05e7\u05d8\u05d2\u05d5\u05e8\u05d9\u05d4"
+    },
+    "payment_method": {
+      "type": "string",
+      "enum": [
+        "credit_card",
+        "bank_transfer",
+        "cash",
+        "check",
+        "paypal",
+        "bit",
+        "other"
+      ]
+    },
+    "receipt_number": {
+      "type": "string"
+    },
+    "invoice_number": {
+      "type": "string"
+    },
+    "receipt_url": {
+      "type": "string"
+    },
+    "has_receipt": {
+      "type": "boolean",
+      "default": false
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending_approval",
+        "approved",
+        "rejected",
+        "missing_receipt",
+        "paid"
+      ],
+      "default": "pending_approval"
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "office",
+        "agent",
+        "deal"
+      ],
+      "default": "office",
+      "description": "\u05e9\u05d9\u05d5\u05da: \u05de\u05e9\u05e8\u05d3 / \u05e1\u05d5\u05db\u05df / \u05e2\u05e1\u05e7\u05d4"
+    },
+    "agent_id": {
+      "type": "string",
+      "description": "\u05de\u05d6\u05d4\u05d4 \u05e1\u05d5\u05db\u05df"
+    },
+    "agent_name": {
+      "type": "string",
+      "description": "\u05e9\u05dd \u05e1\u05d5\u05db\u05df"
+    },
+    "deal_id": {
+      "type": "string",
+      "description": "\u05de\u05d6\u05d4\u05d4 \u05e2\u05e1\u05e7\u05d4"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "document_type": {
+      "type": "string",
+      "enum": [
+        "receipt",
+        "invoice",
+        "tax_invoice",
+        "credit_note",
+        "other"
+      ],
+      "default": "receipt"
+    }
+  },
+  "required": [
+    "vendor_name",
+    "total_amount",
+    "date"
+  ]
+}
