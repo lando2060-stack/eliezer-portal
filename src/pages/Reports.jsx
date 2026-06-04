@@ -1,27 +1,30 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Download, TrendingUp, DollarSign, Users, FileText, Loader2 } from 'lucide-react';
-import { formatCurrency, DEAL_STATUS_MAP } from '@/lib/constants';
+import { Download, TrendingUp, TrendingDown, DollarSign, FileText, Loader2, Wallet } from 'lucide-react';
+import { formatCurrency, DEAL_STATUS_MAP, STATUS_MAP } from '@/lib/constants';
 import { isAdmin } from '@/lib/roles';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { toast } from 'sonner';
 import { downloadCSV } from '@/lib/csv';
+import { format } from 'date-fns';
 
+// ── Date filtering ─────────────────────────────────────────
 const DATE_PRESETS = [
-  { value: 'all', label: 'כל התקופות' },
   { value: 'this_month', label: 'החודש הנוכחי' },
   { value: 'last_month', label: 'החודש הקודם' },
   { value: 'this_quarter', label: 'הרבעון הנוכחי' },
   { value: 'last_quarter', label: 'הרבעון הקודם' },
   { value: 'this_year', label: 'השנה הנוכחית' },
   { value: 'last_year', label: 'השנה הקודמת' },
+  { value: 'all', label: 'כל התקופות' },
   { value: 'custom', label: 'טווח מותאם' },
 ];
 
@@ -42,8 +45,40 @@ function getPresetMonths(preset) {
     }
     case 'this_year': return Array.from({ length: 12 }, (_, i) => fmt(y, i + 1));
     case 'last_year': return Array.from({ length: 12 }, (_, i) => fmt(y - 1, i + 1));
-    default: return null; // all or custom
+    default: return null;
   }
+}
+
+function filterByDate(items, dateField, preset, customFrom, customTo) {
+  if (preset === 'all') return items;
+  if (preset === 'custom') {
+    return items.filter(x => {
+      const v = x[dateField];
+      if (!v) return false;
+      const d = v.slice(0, 7); // YYYY-MM
+      if (customFrom && d < customFrom) return false;
+      if (customTo && d > customTo) return false;
+      return true;
+    });
+  }
+  const months = getPresetMonths(preset);
+  return items.filter(x => {
+    const v = x[dateField];
+    if (!v) return false;
+    return months.includes(v.slice(0, 7));
+  });
+}
+
+// ── KPI Card ───────────────────────────────────────────────
+function KpiCard({ label, value, icon: Icon, color }) {
+  return (
+    <Card className="rounded-2xl">
+      <CardContent className="p-4 flex items-center gap-3">
+        <div className={`p-2 rounded-xl ${color}`}><Icon className="w-5 h-5" /></div>
+        <div><p className="text-xs text-muted-foreground">{label}</p><p className="text-xl font-bold">{value}</p></div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function Reports() {
@@ -57,66 +92,70 @@ export default function Reports() {
 
   const { data: agents = [] } = useQuery({ queryKey: ['agents'], queryFn: () => base44.entities.Agent.list() });
   const { data: allDeals = [] } = useQuery({ queryKey: ['deals'], queryFn: () => base44.entities.Deal.list('-created_date', 500) });
+  const { data: allExpenses = [] } = useQuery({ queryKey: ['expenses'], queryFn: () => base44.entities.Expense.list('-date', 500) });
 
   const myAgent = agents.find(a => a.user_id === user?.id);
 
+  // ── הכנסות (deals) ───────────────────────────────────────
   const deals = useMemo(() => {
     let d = allDeals;
     if (!isAdmin(user)) d = d.filter(x => x.agent_id === myAgent?.id);
     if (selectedAgent !== 'all') d = d.filter(x => x.agent_id === selectedAgent);
-    if (datePreset !== 'all') {
-      if (datePreset === 'custom') {
-        if (customFrom) d = d.filter(x => x.month >= customFrom);
-        if (customTo) d = d.filter(x => x.month <= customTo);
-      } else {
-        const presetMonths = getPresetMonths(datePreset);
-        if (presetMonths) d = d.filter(x => presetMonths.includes(x.month));
-      }
+    // filter by month field
+    if (datePreset === 'all') return d;
+    if (datePreset === 'custom') {
+      return d.filter(x => {
+        if (!x.month) return false;
+        if (customFrom && x.month < customFrom) return false;
+        if (customTo && x.month > customTo) return false;
+        return true;
+      });
     }
-    return d;
+    const months = getPresetMonths(datePreset);
+    return d.filter(x => months?.includes(x.month));
   }, [allDeals, user, myAgent, selectedAgent, datePreset, customFrom, customTo]);
 
-  const months = useMemo(() => [...new Set(allDeals.map(d => d.month).filter(Boolean))].sort().reverse(), [allDeals]);
+  // ── הוצאות ───────────────────────────────────────────────
+  const expenses = useMemo(() => {
+    let e = allExpenses;
+    if (!isAdmin(user)) e = e.filter(x => x.agent_id === myAgent?.id || x.created_by_id === user?.id);
+    if (isAdmin(user) && selectedAgent !== 'all') e = e.filter(x => x.agent_id === selectedAgent);
+    return filterByDate(e, 'date', datePreset, customFrom, customTo);
+  }, [allExpenses, user, myAgent, selectedAgent, datePreset, customFrom, customTo]);
 
-  const { totalCommission, totalCollected, totalAgentCommission, totalOfficeCommission } = useMemo(() => ({
+  // ── KPIs ─────────────────────────────────────────────────
+  const incomeStats = useMemo(() => ({
     totalCommission: deals.reduce((s, d) => s + (d.commission_amount || 0), 0),
     totalCollected: deals.reduce((s, d) => s + (d.collected_actual || 0), 0),
-    totalAgentCommission: deals.reduce((s, d) => s + (d.agent_commission || 0), 0),
-    totalOfficeCommission: deals.reduce((s, d) => s + (d.office_commission || 0), 0),
+    totalAgentComm: deals.reduce((s, d) => s + (d.agent_commission || 0), 0),
+    totalOfficeComm: deals.reduce((s, d) => s + (d.office_commission || 0), 0),
   }), [deals]);
 
-  // Per-agent summary (admin only)
-  const agentSummary = useMemo(() => {
-    if (!isAdmin(user)) return [];
-    const map = {};
-    allDeals.forEach(d => {
-      if (!d.agent_id) return;
-      if (!map[d.agent_id]) map[d.agent_id] = { agent_name: d.agent_name, deals: 0, commission: 0, agent_commission: 0, paid: 0 };
-      map[d.agent_id].deals++;
-      map[d.agent_id].commission += d.commission_amount || 0;
-      map[d.agent_id].agent_commission += d.agent_commission || 0;
-      map[d.agent_id].paid += d.paid_to_agent || 0;
-    });
-    return Object.values(map);
-  }, [allDeals, user]);
+  const expenseStats = useMemo(() => ({
+    total: expenses.reduce((s, e) => s + (e.total_amount || 0), 0),
+    pending: expenses.filter(e => e.status === 'pending_approval').length,
+    approved: expenses.filter(e => e.status === 'approved').reduce((s, e) => s + (e.total_amount || 0), 0),
+  }), [expenses]);
 
-  const exportCSV = () => {
-    const filename = `עסקאות_${datePreset !== 'all' ? datePreset : 'כולל'}.csv`;
-    downloadCSV(filename, deals, {
-      month: 'חודש',
-      client_name: 'לקוח',
-      address: 'כתובת',
-      agent_name: 'סוכן',
-      deal_amount: 'סכום עסקה',
-      commission_amount: 'עמלה',
-      collected_actual: 'נגבה',
-      agent_commission: 'עמלת סוכן',
-      office_commission: 'עמלת משרד',
-      paid_to_agent: 'שולם לסוכן',
-      status: 'סטטוס',
-      payment_method: 'אמצעי תשלום',
+  const netProfit = incomeStats.totalOfficeComm - expenseStats.total;
+
+  // ── Exports ──────────────────────────────────────────────
+  const exportDealsCSV = () => {
+    downloadCSV(`הכנסות_${datePreset}.csv`, deals, {
+      month: 'חודש', client_name: 'לקוח', agent_name: 'סוכן',
+      commission_amount: 'עמלה', collected_actual: 'נגבה',
+      agent_commission: 'עמלת סוכן', office_commission: 'עמלת משרד', status: 'סטטוס',
     });
-    toast.success('הדוח יוצא בהצלחה');
+    toast.success('יוצא בהצלחה');
+  };
+
+  const exportExpensesCSV = () => {
+    downloadCSV(`הוצאות_${datePreset}.csv`, expenses, {
+      date: 'תאריך', vendor_name: 'ספק', category: 'קטגוריה',
+      total_amount: 'סכום', payment_method: 'אמצעי תשלום',
+      agent_name: 'סוכן', status: 'סטטוס',
+    });
+    toast.success('יוצא בהצלחה');
   };
 
   const exportPDF = async () => {
@@ -129,177 +168,192 @@ export default function Reports() {
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const pageW = pdf.internal.pageSize.getWidth();
-      const pageH = pdf.internal.pageSize.getHeight();
       const imgW = pageW - 20;
       const imgH = (canvas.height * imgW) / canvas.width;
-      let yPos = 10;
-      let heightLeft = imgH;
-      pdf.addImage(imgData, 'PNG', 10, yPos, imgW, imgH);
-      heightLeft -= pageH - 20;
-      while (heightLeft > 0) {
-        yPos = heightLeft - imgH + 10;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 10, yPos, imgW, imgH);
-        heightLeft -= pageH - 20;
-      }
-      const fileName = `דוח_${datePreset !== 'all' ? datePreset : 'כולל'}.pdf`;
-      pdf.save(fileName);
+      pdf.addImage(imgData, 'PNG', 10, 10, imgW, imgH);
+      pdf.save(`כספים_${datePreset}.pdf`);
       toast.success('הדוח יוצא בהצלחה');
-    } catch {
-      toast.error('שגיאה בייצוא הדוח');
-    } finally {
-      setExporting(false);
-    }
+    } catch { toast.error('שגיאה בייצוא'); }
+    finally { setExporting(false); }
   };
 
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold">הכנסות ועמלות</h1>
-        <div className="flex gap-2 flex-wrap">
-          {isAdmin(user) && (
-            <Select value={selectedAgent} onValueChange={setSelectedAgent}>
-              <SelectTrigger className="w-36 rounded-xl"><SelectValue placeholder="כל הסוכנים" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">כל הסוכנים</SelectItem>
-                {agents.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          )}
-          <Select value={datePreset} onValueChange={setDatePreset}>
-            <SelectTrigger className="w-44 rounded-xl"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {DATE_PRESETS.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          {datePreset === 'custom' && (
-            <>
-              <Input type="month" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="w-36 rounded-xl" placeholder="מ-" />
-              <Input type="month" value={customTo} onChange={e => setCustomTo(e.target.value)} className="w-36 rounded-xl" placeholder="עד" />
-            </>
-          )}
-          <Button variant="outline" className="gap-2 rounded-xl" onClick={exportCSV}>
-            <Download className="w-4 h-4" /> CSV
-          </Button>
-          <Button variant="outline" className="gap-2 rounded-xl" onClick={exportPDF} disabled={exporting}>
-            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-            PDF
-          </Button>
-        </div>
-      </div>
-
-      <div ref={reportRef}>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="rounded-2xl"><CardContent className="p-5">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-xl"><FileText className="w-5 h-5 text-blue-600" /></div>
-            <div><p className="text-xs text-muted-foreground">עסקאות</p><p className="text-xl font-bold">{deals.length}</p></div>
-          </div>
-        </CardContent></Card>
-        <Card className="rounded-2xl"><CardContent className="p-5">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-purple-100 rounded-xl"><DollarSign className="w-5 h-5 text-purple-600" /></div>
-            <div><p className="text-xs text-muted-foreground">סה"כ עמלות</p><p className="text-xl font-bold">{formatCurrency(totalCommission)}</p></div>
-          </div>
-        </CardContent></Card>
-        <Card className="rounded-2xl"><CardContent className="p-5">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-emerald-100 rounded-xl"><TrendingUp className="w-5 h-5 text-emerald-600" /></div>
-            <div><p className="text-xs text-muted-foreground">נגבה בפועל</p><p className="text-xl font-bold">{formatCurrency(totalCollected)}</p></div>
-          </div>
-        </CardContent></Card>
-        {isAdmin(user) ? (
-          <Card className="rounded-2xl"><CardContent className="p-5">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-100 rounded-xl"><Users className="w-5 h-5 text-amber-600" /></div>
-              <div><p className="text-xs text-muted-foreground">רווח משרד</p><p className="text-xl font-bold">{formatCurrency(totalOfficeCommission)}</p></div>
-            </div>
-          </CardContent></Card>
-        ) : (
-          <Card className="rounded-2xl"><CardContent className="p-5">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-100 rounded-xl"><DollarSign className="w-5 h-5 text-amber-600" /></div>
-              <div><p className="text-xs text-muted-foreground">עמלות שלי</p><p className="text-xl font-bold">{formatCurrency(totalAgentCommission)}</p></div>
-            </div>
-          </CardContent></Card>
-        )}
-      </div>
-
-      {/* Admin: agent summary table */}
-      {isAdmin(user) && selectedAgent === 'all' && datePreset === 'all' && (
-        <Card className="rounded-2xl overflow-hidden">
-          <CardHeader><CardTitle className="text-base">סיכום לפי סוכן</CardTitle></CardHeader>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/50">
-                  <TableHead className="text-right">סוכן</TableHead>
-                  <TableHead className="text-right">עסקאות</TableHead>
-                  <TableHead className="text-right">סה"כ עמלות</TableHead>
-                  <TableHead className="text-right">עמלת סוכן</TableHead>
-                  <TableHead className="text-right">שולם</TableHead>
-                  <TableHead className="text-right">יתרה</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {agentSummary.map((row, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-medium">{row.agent_name}</TableCell>
-                    <TableCell>{row.deals}</TableCell>
-                    <TableCell>{formatCurrency(row.commission)}</TableCell>
-                    <TableCell>{formatCurrency(row.agent_commission)}</TableCell>
-                    <TableCell>{formatCurrency(row.paid)}</TableCell>
-                    <TableCell className="text-amber-700 font-semibold">{formatCurrency(row.agent_commission - row.paid)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </Card>
+  // ── Shared filters bar ───────────────────────────────────
+  const FiltersBar = ({ onExportCSV }) => (
+    <div className="flex gap-2 flex-wrap">
+      {isAdmin(user) && (
+        <Select value={selectedAgent} onValueChange={setSelectedAgent}>
+          <SelectTrigger className="w-36 rounded-xl"><SelectValue placeholder="כל הסוכנים" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">כל הסוכנים</SelectItem>
+            {agents.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
       )}
+      <Select value={datePreset} onValueChange={setDatePreset}>
+        <SelectTrigger className="w-44 rounded-xl"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {DATE_PRESETS.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      {datePreset === 'custom' && (
+        <>
+          <Input type="month" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="w-32 rounded-xl" />
+          <Input type="month" value={customTo} onChange={e => setCustomTo(e.target.value)} className="w-32 rounded-xl" />
+        </>
+      )}
+      <Button variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={onExportCSV}>
+        <Download className="w-4 h-4" /> CSV
+      </Button>
+      <Button variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={exportPDF} disabled={exporting}>
+        {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} PDF
+      </Button>
+    </div>
+  );
 
-      {/* Deals list */}
-      <Card className="rounded-2xl overflow-hidden">
-        <CardHeader><CardTitle className="text-base">עסקאות מפורטות</CardTitle></CardHeader>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead className="text-right">חודש</TableHead>
-                <TableHead className="text-right">לקוח</TableHead>
-                {isAdmin(user) && <TableHead className="text-right">סוכן</TableHead>}
-                <TableHead className="text-right">עמלה</TableHead>
-                <TableHead className="text-right">נגבה</TableHead>
-                <TableHead className="text-right">עמלת סוכן</TableHead>
-                {isAdmin(user) && <TableHead className="text-right">עמלת משרד</TableHead>}
-                <TableHead className="text-right">סטטוס</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {deals.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">אין נתונים</TableCell></TableRow>
-              ) : deals.map(d => {
-                const st = DEAL_STATUS_MAP[d.status] || DEAL_STATUS_MAP['פתוחה'];
+  return (
+    <div className="space-y-6" ref={reportRef}>
+      {/* Header + summary KPIs */}
+      <div>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <Wallet className="w-6 h-6 text-primary" /> כספים
+        </h1>
+        <p className="text-muted-foreground text-sm mt-1">הכנסות והוצאות בתקופה הנבחרת</p>
+      </div>
+
+      {/* Summary row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <KpiCard label="סה״כ עמלות" value={formatCurrency(incomeStats.totalCommission)} icon={TrendingUp} color="bg-emerald-100 text-emerald-600" />
+        <KpiCard label="סה״כ הוצאות" value={formatCurrency(expenseStats.total)} icon={TrendingDown} color="bg-red-100 text-red-600" />
+        <KpiCard label={isAdmin(user) ? 'רווח משרד' : 'עמלה שלי'} value={formatCurrency(isAdmin(user) ? incomeStats.totalOfficeComm : incomeStats.totalAgentComm)} icon={DollarSign} color="bg-blue-100 text-blue-600" />
+        {isAdmin(user)
+          ? <KpiCard label="רווח נקי (משוער)" value={formatCurrency(netProfit)} icon={Wallet} color={netProfit >= 0 ? 'bg-purple-100 text-purple-600' : 'bg-orange-100 text-orange-600'} />
+          : <KpiCard label="הוצאות ממתינות" value={expenseStats.pending} icon={FileText} color="bg-amber-100 text-amber-600" />
+        }
+      </div>
+
+      {/* Tabs */}
+      <Tabs defaultValue="income">
+        <TabsList className="rounded-xl">
+          <TabsTrigger value="income" className="gap-2 rounded-lg">
+            <TrendingUp className="w-4 h-4" /> הכנסות ({deals.length})
+          </TabsTrigger>
+          <TabsTrigger value="expenses" className="gap-2 rounded-lg">
+            <TrendingDown className="w-4 h-4" /> הוצאות ({expenses.length})
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ── הכנסות Tab ── */}
+        <TabsContent value="income" className="mt-4 space-y-4">
+          <div className="flex justify-between items-center flex-wrap gap-2">
+            <p className="text-sm text-muted-foreground">
+              עמלות: <strong>{formatCurrency(incomeStats.totalCommission)}</strong> •
+              נגבה: <strong>{formatCurrency(incomeStats.totalCollected)}</strong>
+              {isAdmin(user) && <> • משרד: <strong>{formatCurrency(incomeStats.totalOfficeComm)}</strong></>}
+            </p>
+            <FiltersBar onExportCSV={exportDealsCSV} />
+          </div>
+
+          {isAdmin(user) && selectedAgent === 'all' && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {agents.filter(a => deals.some(d => d.agent_id === a.id)).map(a => {
+                const ad = deals.filter(d => d.agent_id === a.id);
                 return (
-                  <TableRow key={d.id}>
-                    <TableCell className="text-sm">{d.month}</TableCell>
-                    <TableCell className="font-medium text-sm">{d.client_name}</TableCell>
-                    {isAdmin(user) && <TableCell className="text-sm">{d.agent_name}</TableCell>}
-                    <TableCell className="text-sm">{formatCurrency(d.commission_amount)}</TableCell>
-                    <TableCell className="text-sm">{formatCurrency(d.collected_actual)}</TableCell>
-                    <TableCell className="text-sm text-emerald-700">{formatCurrency(d.agent_commission)}</TableCell>
-                    {isAdmin(user) && <TableCell className="text-sm text-primary">{formatCurrency(d.office_commission)}</TableCell>}
-                    <TableCell><Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge></TableCell>
-                  </TableRow>
+                  <Card key={a.id} className="rounded-xl">
+                    <CardContent className="p-3">
+                      <p className="font-semibold text-sm">{a.name}</p>
+                      <p className="text-xs text-muted-foreground">{ad.length} עסקאות</p>
+                      <p className="text-sm font-bold text-emerald-700 mt-1">{formatCurrency(ad.reduce((s, d) => s + (d.agent_commission || 0), 0))}</p>
+                    </CardContent>
+                  </Card>
                 );
               })}
-            </TableBody>
-          </Table>
-        </div>
-      </Card>
-      </div>
+            </div>
+          )}
+
+          <Card className="rounded-2xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="text-right">חודש</TableHead>
+                    <TableHead className="text-right">לקוח</TableHead>
+                    {isAdmin(user) && <TableHead className="text-right">סוכן</TableHead>}
+                    <TableHead className="text-right">סכום עסקה</TableHead>
+                    <TableHead className="text-right">עמלה</TableHead>
+                    <TableHead className="text-right">עמלת סוכן</TableHead>
+                    {isAdmin(user) && <TableHead className="text-right">עמלת משרד</TableHead>}
+                    <TableHead className="text-right">סטטוס</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {deals.length === 0 ? (
+                    <TableRow><TableCell colSpan={8} className="text-center py-10 text-muted-foreground">אין עסקאות בתקופה זו</TableCell></TableRow>
+                  ) : deals.map(d => {
+                    const st = DEAL_STATUS_MAP[d.status] || DEAL_STATUS_MAP['פתוחה'];
+                    return (
+                      <TableRow key={d.id}>
+                        <TableCell className="text-sm">{d.month}</TableCell>
+                        <TableCell className="font-medium text-sm">{d.client_name}</TableCell>
+                        {isAdmin(user) && <TableCell className="text-sm text-muted-foreground">{d.agent_name}</TableCell>}
+                        <TableCell className="text-sm">{formatCurrency(d.deal_amount)}</TableCell>
+                        <TableCell className="text-sm font-semibold">{formatCurrency(d.commission_amount)}</TableCell>
+                        <TableCell className="text-sm text-emerald-700">{formatCurrency(d.agent_commission)}</TableCell>
+                        {isAdmin(user) && <TableCell className="text-sm text-primary">{formatCurrency(d.office_commission)}</TableCell>}
+                        <TableCell><Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge></TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+        </TabsContent>
+
+        {/* ── הוצאות Tab ── */}
+        <TabsContent value="expenses" className="mt-4 space-y-4">
+          <div className="flex justify-between items-center flex-wrap gap-2">
+            <p className="text-sm text-muted-foreground">
+              סה״כ: <strong>{formatCurrency(expenseStats.total)}</strong> •
+              ממתינות לאישור: <strong className="text-amber-600">{expenseStats.pending}</strong>
+            </p>
+            <FiltersBar onExportCSV={exportExpensesCSV} />
+          </div>
+
+          <Card className="rounded-2xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="text-right">תאריך</TableHead>
+                    <TableHead className="text-right">ספק</TableHead>
+                    <TableHead className="text-right">קטגוריה</TableHead>
+                    <TableHead className="text-right">סכום</TableHead>
+                    {isAdmin(user) && <TableHead className="text-right">סוכן</TableHead>}
+                    <TableHead className="text-right">סטטוס</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {expenses.length === 0 ? (
+                    <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground">אין הוצאות בתקופה זו</TableCell></TableRow>
+                  ) : expenses.map(e => {
+                    const st = STATUS_MAP[e.status] || STATUS_MAP.pending_approval;
+                    return (
+                      <TableRow key={e.id}>
+                        <TableCell className="text-sm">{e.date ? format(new Date(e.date), 'dd/MM/yy') : '-'}</TableCell>
+                        <TableCell className="font-medium text-sm">{e.vendor_name || '-'}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{e.category || '-'}</TableCell>
+                        <TableCell className="text-sm font-semibold text-red-600">{formatCurrency(e.total_amount)}</TableCell>
+                        {isAdmin(user) && <TableCell className="text-sm text-muted-foreground">{e.agent_name || '-'}</TableCell>}
+                        <TableCell><Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge></TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

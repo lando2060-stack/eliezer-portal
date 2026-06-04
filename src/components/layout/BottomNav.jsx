@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileText, Receipt, TrendingUp, Settings, Plus, X, Upload, PenLine, DollarSign } from 'lucide-react';
+import { LayoutDashboard, FileText, Receipt, Wallet, Settings, Plus, X, Upload, PenLine, DollarSign } from 'lucide-react';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { isAdmin } from '@/lib/roles';
 import { useQuery } from '@tanstack/react-query';
@@ -10,7 +10,7 @@ const agentNav = [
   { path: '/', label: 'דשבורד', icon: LayoutDashboard },
   { path: '/deals', label: 'עסקאות', icon: FileText },
   { path: '/expenses', label: 'הוצאות', icon: Receipt },
-  { path: '/reports', label: 'הכנסות', icon: TrendingUp },
+  { path: '/reports', label: 'כספים', icon: Wallet },
   { path: '/settings', label: 'הגדרות', icon: Settings },
 ];
 
@@ -18,7 +18,7 @@ const adminNav = [
   { path: '/', label: 'דשבורד', icon: LayoutDashboard },
   { path: '/deals', label: 'עסקאות', icon: FileText },
   { path: '/expenses', label: 'הוצאות', icon: Receipt },
-  { path: '/reports', label: 'הכנסות', icon: TrendingUp },
+  { path: '/reports', label: 'כספים', icon: Wallet },
   { path: '/settings', label: 'הגדרות', icon: Settings },
 ];
 
