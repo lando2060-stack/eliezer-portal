@@ -162,10 +162,20 @@ export default function UploadReceipt() {
 
       return expense;
     },
-    onSuccess: () => {
+    onSuccess: (expense) => {
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
       queryClient.invalidateQueries({ queryKey: ['vendors'] });
       toast.success('ההוצאה נשמרה בהצלחה!');
+      // Upload to Google Drive in background — non-blocking
+      if (expense?.receipt_url) {
+        const ext = expense.receipt_url.split('.').pop()?.split('?')[0] || 'jpg';
+        const fileName = `${expense.vendor_name || 'קבלה'}_${expense.date || new Date().toISOString().split('T')[0]}.${ext}`;
+        fetch('/api/google/upload-to-drive', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file_url: expense.receipt_url, file_name: fileName }),
+        }).catch(() => {}); // silent fail
+      }
       navigate('/expenses');
     },
     onError: (err) => {

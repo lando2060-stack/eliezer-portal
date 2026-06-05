@@ -382,30 +382,97 @@ function CategoriesTab() {
 
 // ---- Integrations Tab ----
 function IntegrationsTab() {
+  const [driveStatus, setDriveStatus] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [disconnecting, setDisconnecting] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/google/status')
+      .then(r => r.json())
+      .then(data => setDriveStatus(data))
+      .catch(() => setDriveStatus({ connected: false }))
+      .finally(() => setLoading(false));
+
+    // Check URL params for connection result
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('drive') === 'connected') {
+      toast.success('Google Drive חובר בהצלחה!');
+      window.history.replaceState({}, '', '/settings');
+    } else if (params.get('drive') === 'error') {
+      toast.error('שגיאה בחיבור Google Drive');
+      window.history.replaceState({}, '', '/settings');
+    }
+  }, []);
+
+  const handleConnect = async () => {
+    const res = await fetch('/api/google/auth-url');
+    const { url } = await res.json();
+    window.location.href = url;
+  };
+
+  const handleDisconnect = async () => {
+    if (!window.confirm('לנתק את Google Drive?')) return;
+    setDisconnecting(true);
+    await fetch('/api/google/disconnect', { method: 'POST' });
+    setDriveStatus({ connected: false });
+    setDisconnecting(false);
+    toast.success('Google Drive נותק');
+  };
+
   return (
     <div className="space-y-4 max-w-2xl">
-      <Card className="rounded-2xl border-amber-200 bg-amber-50">
+
+      {/* Google Drive */}
+      <Card className="rounded-2xl">
         <CardContent className="p-5">
-          <div className="flex gap-3">
-            <div className="text-2xl">⚙️</div>
-            <div>
-              <p className="font-semibold text-amber-800">נדרשת הפעלת Backend Functions</p>
-              <p className="text-sm text-amber-700 mt-1">
-                כדי לחבר Gmail ו-Google Drive, יש להפעיל את Backend Functions בהגדרות הפלטפורמה:
-              </p>
-              <ol className="text-sm text-amber-700 mt-2 space-y-1 list-decimal list-inside">
-                <li>לך ל-Dashboard של Base44</li>
-                <li>לחץ על <strong>Code</strong> בתפריט</li>
-                <li>לחץ על <strong>Enable Backend Functions</strong></li>
-                <li>חזור לכאן — כפתורי החיבור יהיו פעילים</li>
-              </ol>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center">
+                <HardDrive className="w-6 h-6 text-blue-500" />
+              </div>
+              <div>
+                <div className="font-semibold flex items-center gap-2">
+                  Google Drive
+                  {loading ? (
+                    <Badge variant="outline" className="text-xs text-muted-foreground">בודק...</Badge>
+                  ) : driveStatus?.connected ? (
+                    <Badge className="text-xs bg-emerald-100 text-emerald-700 border-emerald-200">מחובר</Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-xs text-muted-foreground">לא מחובר</Badge>
+                  )}
+                </div>
+                {driveStatus?.connected ? (
+                  <div className="mt-1 space-y-0.5">
+                    <p className="text-sm text-muted-foreground">{driveStatus.email}</p>
+                    <a href={driveStatus.folderUrl} target="_blank" rel="noopener noreferrer"
+                      className="text-xs text-primary hover:underline">
+                      פתח תיקיית קבלות ב-Drive ↗
+                    </a>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    כל קבלה שתועלה תישמר אוטומטית ב-Drive של החברה
+                  </p>
+                )}
+              </div>
             </div>
+            {driveStatus?.connected ? (
+              <Button variant="outline" className="rounded-xl text-destructive border-destructive/30 hover:bg-destructive hover:text-white"
+                onClick={handleDisconnect} disabled={disconnecting}>
+                נתק
+              </Button>
+            ) : (
+              <Button className="rounded-xl gap-2" onClick={handleConnect} disabled={loading}>
+                <svg className="w-4 h-4" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+                התחבר עם Google
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Gmail */}
-      <Card className="rounded-2xl opacity-60">
+      {/* Gmail - future */}
+      <Card className="rounded-2xl opacity-50">
         <CardContent className="p-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -415,30 +482,9 @@ function IntegrationsTab() {
               <div>
                 <div className="font-semibold flex items-center gap-2">
                   Gmail
-                  <Badge variant="outline" className="text-xs text-muted-foreground">לא מחובר</Badge>
+                  <Badge variant="outline" className="text-xs text-muted-foreground">בקרוב</Badge>
                 </div>
-                <p className="text-sm text-muted-foreground mt-0.5">סריקה אוטומטית של קבלות וחשבוניות שמגיעות למייל</p>
-              </div>
-            </div>
-            <Button disabled className="rounded-xl">חבר</Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Google Drive */}
-      <Card className="rounded-2xl opacity-60">
-        <CardContent className="p-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center">
-                <HardDrive className="w-6 h-6 text-blue-400" />
-              </div>
-              <div>
-                <div className="font-semibold flex items-center gap-2">
-                  Google Drive
-                  <Badge variant="outline" className="text-xs text-muted-foreground">לא מחובר</Badge>
-                </div>
-                <p className="text-sm text-muted-foreground mt-0.5">אחסון מסמכים וקבלות ב-Google Drive שלך</p>
+                <p className="text-sm text-muted-foreground mt-0.5">סריקה אוטומטית של קבלות שמגיעות למייל</p>
               </div>
             </div>
             <Button disabled className="rounded-xl">חבר</Button>
