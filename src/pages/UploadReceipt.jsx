@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
+import { supabase } from '@/lib/supabase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -170,11 +171,16 @@ export default function UploadReceipt() {
       if (expense?.receipt_url) {
         const ext = expense.receipt_url.split('.').pop()?.split('?')[0] || 'jpg';
         const fileName = `${expense.vendor_name || 'קבלה'}_${expense.date || new Date().toISOString().split('T')[0]}.${ext}`;
-        fetch('/api/google/upload-to-drive', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ file_url: expense.receipt_url, file_name: fileName }),
-        }).catch(() => {}); // silent fail
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          fetch('/api/google/upload-to-drive', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
+            },
+            body: JSON.stringify({ file_url: expense.receipt_url, file_name: fileName }),
+          }).catch(() => {});
+        });
       }
       navigate('/expenses');
     },

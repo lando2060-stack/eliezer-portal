@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { PAYMENT_METHODS } from '@/lib/constants';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { isAdmin } from '@/lib/roles';
+import { supabase } from '@/lib/supabase';
 
 const COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#14b8a6', '#a855f7', '#3b82f6', '#84cc16', '#d946ef', '#0ea5e9', '#f43f5e', '#eab308', '#22c55e', '#dc2626', '#9ca3af'];
 
@@ -382,45 +383,66 @@ function CategoriesTab() {
 
 // ---- Integrations Tab ----
 function IntegrationsTab() {
-  const [driveStatus, setDriveStatus] = useState(null);
+  const [googleStatus, setGoogleStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [disconnecting, setDisconnecting] = useState(false);
 
-  useEffect(() => {
-    fetch('/api/google/status')
-      .then(r => r.json())
-      .then(data => setDriveStatus(data))
-      .catch(() => setDriveStatus({ connected: false }))
-      .finally(() => setLoading(false));
+  const getAuthHeaders = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session ? { Authorization: `Bearer ${session.access_token}` } : {};
+  };
 
-    // Check URL params for connection result
+  useEffect(() => {
+    getAuthHeaders().then(headers =>
+      fetch('/api/google/status', { headers })
+        .then(r => r.json())
+        .then(data => setGoogleStatus(data))
+        .catch(() => setGoogleStatus({ connected: false }))
+        .finally(() => setLoading(false))
+    );
+
     const params = new URLSearchParams(window.location.search);
     if (params.get('drive') === 'connected') {
-      toast.success('Google Drive חובר בהצלחה!');
+      toast.success('Google חובר בהצלחה! Drive ו-Gmail פעילים.');
       window.history.replaceState({}, '', '/settings');
     } else if (params.get('drive') === 'error') {
-      toast.error('שגיאה בחיבור Google Drive');
+      toast.error('שגיאה בחיבור Google');
       window.history.replaceState({}, '', '/settings');
     }
   }, []);
 
   const handleConnect = async () => {
-    const res = await fetch('/api/google/auth-url');
-    const { url } = await res.json();
+    const headers = await getAuthHeaders();
+    const res = await fetch('/api/google/auth-url', { headers });
+    const { url, error } = await res.json();
+    if (error || !url) { toast.error('שגיאה ביצירת קישור התחברות'); return; }
     window.location.href = url;
   };
 
   const handleDisconnect = async () => {
-    if (!window.confirm('לנתק את Google Drive?')) return;
+    if (!window.confirm('לנתק את Google?')) return;
     setDisconnecting(true);
-    await fetch('/api/google/disconnect', { method: 'POST' });
-    setDriveStatus({ connected: false });
+    const headers = await getAuthHeaders();
+    await fetch('/api/google/disconnect', { method: 'POST', headers });
+    setGoogleStatus({ connected: false });
     setDisconnecting(false);
-    toast.success('Google Drive נותק');
+    toast.success('Google נותק');
   };
+
+  const GoogleIcon = () => (
+    <svg className="w-4 h-4" viewBox="0 0 24 24">
+      <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+      <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+      <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+      <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+    </svg>
+  );
 
   return (
     <div className="space-y-4 max-w-2xl">
+      <p className="text-sm text-muted-foreground">
+        חבר את חשבון Google שלך כדי לשמור קבלות ב-Drive ולסרוק קבלות שמגיעות למייל.
+      </p>
 
       {/* Google Drive */}
       <Card className="rounded-2xl">
@@ -435,44 +457,43 @@ function IntegrationsTab() {
                   Google Drive
                   {loading ? (
                     <Badge variant="outline" className="text-xs text-muted-foreground">בודק...</Badge>
-                  ) : driveStatus?.connected ? (
+                  ) : googleStatus?.connected ? (
                     <Badge className="text-xs bg-emerald-100 text-emerald-700 border-emerald-200">מחובר</Badge>
                   ) : (
                     <Badge variant="outline" className="text-xs text-muted-foreground">לא מחובר</Badge>
                   )}
                 </div>
-                {driveStatus?.connected ? (
+                {googleStatus?.connected ? (
                   <div className="mt-1 space-y-0.5">
-                    <p className="text-sm text-muted-foreground">{driveStatus.email}</p>
-                    <a href={driveStatus.folderUrl} target="_blank" rel="noopener noreferrer"
+                    <p className="text-sm text-muted-foreground">{googleStatus.email}</p>
+                    <a href={googleStatus.folderUrl} target="_blank" rel="noopener noreferrer"
                       className="text-xs text-primary hover:underline">
                       פתח תיקיית קבלות ב-Drive ↗
                     </a>
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground mt-0.5">
-                    כל קבלה שתועלה תישמר אוטומטית ב-Drive של החברה
+                    כל קבלה שתועלה תישמר אוטומטית ב-Drive שלך
                   </p>
                 )}
               </div>
             </div>
-            {driveStatus?.connected ? (
+            {googleStatus?.connected ? (
               <Button variant="outline" className="rounded-xl text-destructive border-destructive/30 hover:bg-destructive hover:text-white"
                 onClick={handleDisconnect} disabled={disconnecting}>
                 נתק
               </Button>
             ) : (
               <Button className="rounded-xl gap-2" onClick={handleConnect} disabled={loading}>
-                <svg className="w-4 h-4" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-                התחבר עם Google
+                <GoogleIcon /> התחבר עם Google
               </Button>
             )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Gmail - future */}
-      <Card className="rounded-2xl opacity-50">
+      {/* Gmail */}
+      <Card className="rounded-2xl">
         <CardContent className="p-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -482,12 +503,26 @@ function IntegrationsTab() {
               <div>
                 <div className="font-semibold flex items-center gap-2">
                   Gmail
-                  <Badge variant="outline" className="text-xs text-muted-foreground">בקרוב</Badge>
+                  {loading ? (
+                    <Badge variant="outline" className="text-xs text-muted-foreground">בודק...</Badge>
+                  ) : googleStatus?.connected ? (
+                    <Badge className="text-xs bg-emerald-100 text-emerald-700 border-emerald-200">מחובר</Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-xs text-muted-foreground">לא מחובר</Badge>
+                  )}
                 </div>
-                <p className="text-sm text-muted-foreground mt-0.5">סריקה אוטומטית של קבלות שמגיעות למייל</p>
+                {googleStatus?.connected ? (
+                  <p className="text-sm text-muted-foreground mt-0.5">{googleStatus.email}</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground mt-0.5">סריקה אוטומטית של קבלות שמגיעות למייל</p>
+                )}
               </div>
             </div>
-            <Button disabled className="rounded-xl">חבר</Button>
+            {!googleStatus?.connected && (
+              <Button className="rounded-xl gap-2" onClick={handleConnect} disabled={loading}>
+                <GoogleIcon /> התחבר
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -557,7 +592,7 @@ export default function Settings() {
           <TabsTrigger value="recurring" className="gap-2 rounded-lg"><RefreshCw className="w-4 h-4" /> הוצאות קבועות</TabsTrigger>
           {admin && <TabsTrigger value="vendors" className="gap-2 rounded-lg"><Building2 className="w-4 h-4" /> ספקים</TabsTrigger>}
           <TabsTrigger value="categories" className="gap-2 rounded-lg"><Tag className="w-4 h-4" /> קטגוריות</TabsTrigger>
-          {admin && <TabsTrigger value="integrations" className="gap-2 rounded-lg"><Mail className="w-4 h-4" /> חיבורי Google</TabsTrigger>}
+          <TabsTrigger value="integrations" className="gap-2 rounded-lg"><Mail className="w-4 h-4" /> חיבורי Google</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile" className="mt-4"><ProfileTab /></TabsContent>
@@ -565,7 +600,7 @@ export default function Settings() {
         <TabsContent value="recurring" className="mt-4"><RecurringTab /></TabsContent>
         {admin && <TabsContent value="vendors" className="mt-4"><VendorsTab /></TabsContent>}
         <TabsContent value="categories" className="mt-4"><CategoriesTab /></TabsContent>
-        {admin && <TabsContent value="integrations" className="mt-4"><IntegrationsTab /></TabsContent>}
+        <TabsContent value="integrations" className="mt-4"><IntegrationsTab /></TabsContent>
       </Tabs>
     </div>
   );

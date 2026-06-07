@@ -1,6 +1,7 @@
 /**
  * GET /api/google/callback
- * Handles OAuth callback from Google, stores tokens, creates Drive folder
+ * Handles OAuth callback from Google, stores tokens per user, creates Drive folder.
+ * user_id is carried via the OAuth `state` parameter (base64-encoded).
  */
 import { createClient } from '@supabase/supabase-js';
 
@@ -31,7 +32,6 @@ async function getConnectedEmail(accessToken) {
 async function getOrCreateFolder(accessToken) {
   const folderName = 'קבלות - אליעזר נכסים';
 
-  // Check if folder already exists
   const searchRes = await fetch(
     `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(`name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`)}&fields=files(id,name)`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -41,7 +41,6 @@ async function getOrCreateFolder(accessToken) {
     return searchData.files[0].id;
   }
 
-  // Create folder
   const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
     method: 'POST',
     headers: {
@@ -58,10 +57,19 @@ async function getOrCreateFolder(accessToken) {
 }
 
 export default async function handler(req, res) {
-  const { code, error } = req.query;
+  const { code, error, state } = req.query;
   const siteUrl = process.env.SITE_URL || 'https://tfila.fyotek.com';
 
-  if (error || !code) {
+  if (error || !code || !state) {
+    return res.redirect(`${siteUrl}/settings?drive=error`);
+  }
+
+  // Decode user_id from state
+  let userId;
+  try {
+    userId = Buffer.from(state, 'base64').toString('utf-8');
+    if (!userId) throw new Error('empty user_id');
+  } catch {
     return res.redirect(`${siteUrl}/settings?drive=error`);
   }
 
@@ -77,12 +85,12 @@ export default async function handler(req, res) {
     const email = await getConnectedEmail(tokens.access_token);
     const folderId = await getOrCreateFolder(tokens.access_token);
 
-    // Delete old integration if exists
-    await supabase.from('google_integrations').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    // Delete existing integration for this user only
+    await supabase.from('google_integrations').delete().eq('user_id', userId);
 
-    // Store new integration
     const expiresAt = new Date(Date.now() + (tokens.expires_in || 3600) * 1000).toISOString();
     await supabase.from('google_integrations').insert({
+      user_id: userId,
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
       expires_at: expiresAt,

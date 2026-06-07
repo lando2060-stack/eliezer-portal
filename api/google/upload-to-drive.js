@@ -1,6 +1,7 @@
 /**
  * POST /api/google/upload-to-drive
- * Downloads file from Supabase Storage URL and uploads to Google Drive
+ * Downloads file from Supabase Storage URL and uploads to Google Drive.
+ * Requires: Authorization: Bearer <supabase_access_token>
  * Body: { file_url, file_name, mime_type? }
  */
 import { createClient } from '@supabase/supabase-js';
@@ -24,7 +25,6 @@ async function getValidAccessToken(integration, supabase) {
   const now = new Date();
   const expiresAt = new Date(integration.expires_at);
 
-  // Refresh if expired or expiring in next 5 minutes
   if (!integration.access_token || expiresAt <= new Date(now.getTime() + 5 * 60 * 1000)) {
     const newTokens = await refreshAccessToken(integration.refresh_token);
     const newExpiresAt = new Date(Date.now() + (newTokens.expires_in || 3600) * 1000).toISOString();
@@ -38,7 +38,6 @@ async function getValidAccessToken(integration, supabase) {
   return integration.access_token;
 }
 
-// Organise receipts in sub-folders by month: קבלות/2026-06
 async function getOrCreateMonthFolder(accessToken, parentFolderId) {
   const now = new Date();
   const monthName = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -66,6 +65,11 @@ async function getOrCreateMonthFolder(accessToken, parentFolderId) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
   const { file_url, file_name, mime_type = 'application/octet-stream' } = req.body;
   if (!file_url) return res.status(400).json({ error: 'file_url required' });
 
@@ -75,10 +79,13 @@ export default async function handler(req, res) {
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
 
+  const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.slice(7));
+  if (authError || !user) return res.status(401).json({ error: 'Unauthorized' });
+
   const { data: integration } = await supabase
     .from('google_integrations')
     .select('*')
-    .limit(1)
+    .eq('user_id', user.id)
     .single();
 
   if (!integration) return res.status(200).json({ skipped: true, reason: 'Drive not connected' });
@@ -87,14 +94,12 @@ export default async function handler(req, res) {
     const accessToken = await getValidAccessToken(integration, supabase);
     const monthFolderId = await getOrCreateMonthFolder(accessToken, integration.drive_folder_id);
 
-    // Download file from Supabase
     const fileRes = await fetch(file_url);
     if (!fileRes.ok) throw new Error('Failed to download file from Supabase');
     const fileBuffer = await fileRes.arrayBuffer();
 
     const name = file_name || file_url.split('/').pop() || 'receipt';
 
-    // Upload to Drive using multipart upload
     const boundary = '-------314159265358979323846';
     const delimiter = `\r\n--${boundary}\r\n`;
     const closeDelimiter = `\r\n--${boundary}--`;
