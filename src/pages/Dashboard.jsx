@@ -4,11 +4,10 @@ import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Link } from 'react-router-dom';
-import { TrendingUp, DollarSign, FileText, AlertCircle, Settings2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { TrendingUp, DollarSign, FileText, AlertCircle } from 'lucide-react';
 import { formatCurrency, DEAL_STATUS_MAP } from '@/lib/constants';
-import { isAdmin } from '@/lib/roles';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { useIsAdminView } from '@/hooks/useIsAdminView';
 import { format } from 'date-fns';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -17,7 +16,13 @@ import {
 const formatShortCurrency = (v) => `₪${(v / 1000).toFixed(0)}k`;
 
 export default function Dashboard() {
-  const { user, loading } = useCurrentUser();
+  const { user } = useCurrentUser();
+  const isAdminView = useIsAdminView();
+
+  const dealsPath  = isAdminView ? '/admin/deals'    : '/deals';
+  const agentsPath = isAdminView ? '/admin/agents'   : '/';
+  const reportsPath = isAdminView ? '/admin/reports' : '/reports';
+  const expensesPath = isAdminView ? '/admin/expenses' : '/expenses';
 
   const { data: agents = [] } = useQuery({ queryKey: ['agents'], queryFn: () => base44.entities.Agent.list() });
   const { data: allDeals = [] } = useQuery({ queryKey: ['deals'], queryFn: () => base44.entities.Deal.list('-created_date', 200) });
@@ -26,14 +31,14 @@ export default function Dashboard() {
   const myAgent = agents.find(a => a.user_id === user?.id);
 
   const deals = useMemo(() => {
-    if (isAdmin(user)) return allDeals;
+    if (isAdminView) return allDeals;
     return allDeals.filter(d => d.agent_id === myAgent?.id);
-  }, [allDeals, user, myAgent]);
+  }, [allDeals, isAdminView, myAgent]);
 
   const expenses = useMemo(() => {
-    if (isAdmin(user)) return allExpenses;
+    if (isAdminView) return allExpenses;
     return allExpenses.filter(e => e.agent_id === myAgent?.id || e.created_by_id === user?.id);
-  }, [allExpenses, user, myAgent]);
+  }, [allExpenses, isAdminView, myAgent, user?.id]);
 
   const now = new Date();
   const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -52,7 +57,6 @@ export default function Dashboard() {
 
   const { monthDeals, totalCommission, totalCollected, totalAgentCommission, totalPaidToAgent, pendingExpenses } = stats;
 
-  // גרף עמלות 6 חודשים אחרונים
   const monthlyChart = useMemo(() => {
     return Array.from({ length: 6 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
@@ -65,11 +69,10 @@ export default function Dashboard() {
         נגבה: Math.round(mDeals.reduce((s, x) => s + (x.collected_actual || 0), 0)),
       };
     });
-  }, [deals, now]);
+  }, [deals]);
 
-  // גרף לפי סוכן — אדמין בלבד
   const agentChart = useMemo(() => {
-    if (!isAdmin(user)) return [];
+    if (!isAdminView) return [];
     return agents.filter(a => a.is_active).map(a => {
       const aDeals = allDeals.filter(d => d.agent_id === a.id);
       return {
@@ -78,33 +81,20 @@ export default function Dashboard() {
         עסקאות: aDeals.length,
       };
     }).filter(a => a.עסקאות > 0);
-  }, [agents, allDeals, user]);
+  }, [agents, allDeals, isAdminView]);
 
   const hasChartData = monthlyChart.some(m => m.עמלות > 0);
 
-  if (loading) return (
-    <div className="fixed inset-0 flex items-center justify-center">
-      <div className="w-8 h-8 border-4 border-slate-200 border-t-primary rounded-full animate-spin" />
-    </div>
-  );
-
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <img src="/logo.webp" alt="אליעזר נכסים" className="h-8 object-contain" />
-          </div>
-          <h1 className="text-2xl font-bold">שלום, {user?.full_name?.split(' ')[0] || 'משתמש'} 👋</h1>
-          <p className="text-muted-foreground text-sm mt-1">{format(now, 'MMMM yyyy')} • {isAdmin(user) ? 'ניהול משרד' : 'פורטל סוכנים'}</p>
+      <div>
+        <div className="flex items-center gap-3 mb-1">
+          <img src="/logo.webp" alt="אליעזר נכסים" className="h-8 object-contain" />
         </div>
-        {isAdmin(user) && (
-          <Link to="/admin">
-            <Button variant="outline" className="gap-2 rounded-xl text-sm">
-              <Settings2 className="w-4 h-4" /> הגדרות ניהול
-            </Button>
-          </Link>
-        )}
+        <h1 className="text-2xl font-bold">שלום, {user?.full_name || 'משתמש'} 👋</h1>
+        <p className="text-muted-foreground text-sm mt-1">
+          {format(now, 'MM/yyyy')} • {isAdminView ? 'ניהול משרד' : 'פורטל סוכנים'}
+        </p>
       </div>
 
       {/* Stats */}
@@ -127,7 +117,7 @@ export default function Dashboard() {
               <div className="p-2 bg-purple-100 rounded-xl"><DollarSign className="w-5 h-5 text-purple-600" /></div>
               <div>
                 <p className="text-xs text-muted-foreground">סה"כ עמלות</p>
-                <p className="text-2xl font-bold">{formatCurrency(totalCommission)}</p>
+                <p className="text-2xl font-bold">{formatCurrency(isAdminView ? totalCommission : totalAgentCommission)}</p>
               </div>
             </div>
           </CardContent>
@@ -138,8 +128,8 @@ export default function Dashboard() {
             <div className="flex items-center gap-3">
               <div className="p-2 bg-emerald-100 rounded-xl"><TrendingUp className="w-5 h-5 text-emerald-600" /></div>
               <div>
-                <p className="text-xs text-muted-foreground">{isAdmin(user) ? 'נגבה' : 'עמלה שלי'}</p>
-                <p className="text-2xl font-bold">{formatCurrency(isAdmin(user) ? totalCollected : totalAgentCommission)}</p>
+                <p className="text-xs text-muted-foreground">{isAdminView ? 'נגבה' : 'יתרה לתשלום'}</p>
+                <p className="text-2xl font-bold">{formatCurrency(isAdminView ? totalCollected : Math.max(0, totalAgentCommission - totalPaidToAgent))}</p>
               </div>
             </div>
           </CardContent>
@@ -148,14 +138,12 @@ export default function Dashboard() {
         <Card className="rounded-2xl">
           <CardContent className="p-5">
             <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-xl ${pendingExpenses > 0 ? 'bg-amber-100' : 'bg-gray-100'}`}>
-                <AlertCircle className={`w-5 h-5 ${pendingExpenses > 0 ? 'text-amber-600' : 'text-gray-400'}`} />
+              <div className={`p-2 rounded-xl ${isAdminView && pendingExpenses > 0 ? 'bg-amber-100' : 'bg-blue-100'}`}>
+                <AlertCircle className={`w-5 h-5 ${isAdminView && pendingExpenses > 0 ? 'text-amber-600' : 'text-blue-600'}`} />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">{isAdmin(user) ? 'ממתין לאישור' : 'יתרה לתשלום'}</p>
-                <p className="text-2xl font-bold">
-                  {isAdmin(user) ? pendingExpenses : formatCurrency(totalAgentCommission - totalPaidToAgent)}
-                </p>
+                <p className="text-xs text-muted-foreground">{isAdminView ? 'ממתין לאישור' : 'סה"כ שולם'}</p>
+                <p className="text-2xl font-bold">{isAdminView ? pendingExpenses : formatCurrency(totalPaidToAgent)}</p>
               </div>
             </div>
           </CardContent>
@@ -184,8 +172,8 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* גרף לפי סוכן — אדמין */}
-      {isAdmin(user) && agentChart.length > 1 && (
+      {/* גרף לפי סוכן — מנהל */}
+      {isAdminView && agentChart.length > 1 && (
         <Card className="rounded-2xl">
           <CardContent className="p-5">
             <h2 className="font-semibold mb-4">עמלות לפי סוכן (כולל)</h2>
@@ -210,7 +198,7 @@ export default function Dashboard() {
         <CardContent className="p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold">עסקאות אחרונות</h2>
-            <Link to="/deals" className="text-sm text-primary hover:underline">כל העסקאות</Link>
+            <Link to={dealsPath} className="text-sm text-primary hover:underline">כל העסקאות</Link>
           </div>
           {deals.slice(0, 5).length === 0 ? (
             <p className="text-center py-6 text-muted-foreground text-sm">אין עסקאות עדיין</p>
@@ -222,7 +210,7 @@ export default function Dashboard() {
                   <div key={d.id} className="flex items-center justify-between py-2 border-b last:border-0">
                     <div>
                       <p className="font-medium text-sm">{d.client_name}</p>
-                      <p className="text-xs text-muted-foreground">{d.address || ''} {isAdmin(user) ? `• ${d.agent_name || ''}` : ''}</p>
+                      <p className="text-xs text-muted-foreground">{d.address || ''}{isAdminView && d.agent_name ? ` • ${d.agent_name}` : ''}</p>
                     </div>
                     <div className="text-right">
                       <p className="font-semibold text-sm">{formatCurrency(d.commission_amount)}</p>
@@ -236,13 +224,42 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* Agent: recent expenses */}
-      {!isAdmin(user) && (
+      {/* Agent: הכנסות אחרונות */}
+      {!isAdminView && deals.length > 0 && (
+        <Card className="rounded-2xl">
+          <CardContent className="p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold">הכנסות אחרונות</h2>
+              <Link to={reportsPath} className="text-sm text-primary hover:underline">כל ההכנסות</Link>
+            </div>
+            <div className="space-y-2">
+              {deals.slice(0, 5).map(d => {
+                const st = DEAL_STATUS_MAP[d.status] || DEAL_STATUS_MAP['פתוחה'];
+                return (
+                  <div key={d.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                    <div>
+                      <p className="font-medium text-sm">{d.client_name}</p>
+                      <p className="text-xs text-muted-foreground">{d.address || ''} • {d.month}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold text-sm text-emerald-700">{formatCurrency(d.agent_commission)}</p>
+                      <Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Agent: הוצאות אחרונות */}
+      {!isAdminView && (
         <Card className="rounded-2xl">
           <CardContent className="p-5 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="font-semibold">הוצאות אחרונות</h2>
-              <Link to="/expenses" className="text-sm text-primary hover:underline">כל ההוצאות</Link>
+              <Link to={expensesPath} className="text-sm text-primary hover:underline">כל ההוצאות</Link>
             </div>
             {expenses.slice(0, 5).length === 0 ? (
               <p className="text-center py-4 text-muted-foreground text-sm">אין הוצאות עדיין</p>
@@ -275,13 +292,13 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Admin: agent summary */}
-      {isAdmin(user) && agents.length > 0 && (
+      {/* Admin: סוכנים פעילים */}
+      {isAdminView && agents.length > 0 && (
         <Card className="rounded-2xl">
           <CardContent className="p-5 space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="font-semibold">סוכנים פעילים</h2>
-              <Link to="/agents" className="text-sm text-primary hover:underline">ניהול סוכנים</Link>
+              <Link to={agentsPath} className="text-sm text-primary hover:underline">ניהול סוכנים</Link>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {agents.filter(a => a.is_active).map(a => {
@@ -294,28 +311,6 @@ export default function Dashboard() {
                   </div>
                 );
               })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Admin: quick links */}
-      {isAdmin(user) && (
-        <Card className="rounded-2xl">
-          <CardContent className="p-5 space-y-3">
-            <h2 className="font-semibold">קישורים מהירים</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {[
-                { to: '/pending', label: 'ממתין לאישור', count: pendingExpenses, countColor: 'text-amber-600' },
-                { to: '/missing-receipts', label: 'חסרות קבלות', count: null, countColor: '' },
-                { to: '/anomalies', label: 'הוצאות חריגות', count: null, countColor: '' },
-                { to: '/activity', label: 'יומן פעילות', count: null, countColor: '' },
-              ].map(({ to, label, count, countColor }) => (
-                <Link key={to} to={to} className="p-3 bg-muted/50 rounded-xl hover:bg-muted transition-colors text-center">
-                  <p className="text-sm font-medium">{label}</p>
-                  {count !== null && count > 0 && <p className={`text-lg font-bold ${countColor}`}>{count}</p>}
-                </Link>
-              ))}
             </div>
           </CardContent>
         </Card>

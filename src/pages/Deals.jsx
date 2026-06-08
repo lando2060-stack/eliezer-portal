@@ -10,8 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Plus, Search, MoreVertical, Pencil, Trash2 } from 'lucide-react';
 import { formatCurrency, DEAL_STATUS_MAP } from '@/lib/constants';
-import { isAdmin } from '@/lib/roles';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { useIsAdminView } from '@/hooks/useIsAdminView';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import DealFormDialog from '@/components/deals/DealFormDialog';
@@ -19,8 +19,12 @@ import DealDetailDialog from '@/components/deals/DealDetailDialog';
 
 export default function Deals() {
   const { user } = useCurrentUser();
+  const isAdminView = useIsAdminView();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [agentFilter, setAgentFilter] = useState('all');
+  const [lawyerFilter, setLawyerFilter] = useState('all');
+  const [cooperationFilter, setCooperationFilter] = useState('all');
   const [editDeal, setEditDeal] = useState(null);
   const [viewDeal, setViewDeal] = useState(null);
   const queryClient = useQueryClient();
@@ -46,7 +50,7 @@ export default function Deals() {
   // filter by agent if not admin
   const myAgent = agents.find(a => a.user_id === user?.id);
   const deals = useMemo(() => {
-    if (isAdmin(user)) return allDeals;
+    if (isAdminView) return allDeals;
     return allDeals.filter(d => d.agent_id === myAgent?.id);
   }, [allDeals, user, myAgent]);
 
@@ -56,27 +60,35 @@ export default function Deals() {
     onError: () => toast.error('שגיאה במחיקת העסקה'),
   });
 
+  const lawyers = useMemo(() => [...new Set(deals.map(d => d.lawyer_name).filter(Boolean))], [deals]);
+  const cooperations = useMemo(() => [...new Set(deals.map(d => d.cooperation_agent).filter(Boolean))], [deals]);
+
   const filtered = useMemo(() => deals.filter(d => {
     const matchSearch = !search || d.client_name?.includes(search) || d.address?.includes(search) || d.agent_name?.includes(search);
     const matchStatus = statusFilter === 'all' || d.status === statusFilter;
-    return matchSearch && matchStatus;
-  }), [deals, search, statusFilter]);
+    const matchAgent = agentFilter === 'all' || d.agent_id === agentFilter;
+    const matchLawyer = lawyerFilter === 'all' || d.lawyer_name === lawyerFilter;
+    const matchCooperation = cooperationFilter === 'all' || d.cooperation_agent === cooperationFilter;
+    return matchSearch && matchStatus && matchAgent && matchLawyer && matchCooperation;
+  }), [deals, search, statusFilter, agentFilter, lawyerFilter, cooperationFilter]);
 
   const totalCommission = filtered.reduce((s, d) => s + (d.commission_amount || 0), 0);
   const totalCollected = filtered.reduce((s, d) => s + (d.collected_actual || 0), 0);
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="me-auto">
           <h1 className="text-2xl font-bold">עסקאות</h1>
           <p className="text-muted-foreground text-sm mt-1">
             {filtered.length} עסקאות • עמלות: {formatCurrency(totalCommission)} • נגבה: {formatCurrency(totalCollected)}
           </p>
         </div>
-        <Button className="gap-2 rounded-xl" onClick={() => setEditDeal({})}>
-          <Plus className="w-4 h-4" /> עסקה חדשה
-        </Button>
+        {isAdminView && (
+          <Button className="gap-2 rounded-xl" onClick={() => setEditDeal({})}>
+            עסקה חדשה <Plus className="w-4 h-4" />
+          </Button>
+        )}
       </div>
 
       <Card className="rounded-2xl">
@@ -87,7 +99,7 @@ export default function Deals() {
               <Input placeholder="חיפוש לקוח, כתובת, סוכן..." value={search} onChange={e => setSearch(e.target.value)} className="pr-9 rounded-xl" />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-44 rounded-xl"><SelectValue placeholder="סטטוס" /></SelectTrigger>
+              <SelectTrigger className="w-40 rounded-xl"><SelectValue placeholder="סטטוס" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">כל הסטטוסים</SelectItem>
                 {Object.keys(DEAL_STATUS_MAP).map(k => (
@@ -95,6 +107,35 @@ export default function Deals() {
                 ))}
               </SelectContent>
             </Select>
+            {isAdminView && (
+              <Select value={agentFilter} onValueChange={setAgentFilter}>
+                <SelectTrigger className="w-36 rounded-xl"><SelectValue placeholder="סוכן" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">כל הסוכנים</SelectItem>
+                  {agents.filter(a => a.is_active).map(a => (
+                    <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {isAdminView && lawyers.length > 0 && (
+              <Select value={lawyerFilter} onValueChange={setLawyerFilter}>
+                <SelectTrigger className="w-36 rounded-xl"><SelectValue placeholder='עו"ד' /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">כל עוה"ד</SelectItem>
+                  {lawyers.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
+            {isAdminView && cooperations.length > 0 && (
+              <Select value={cooperationFilter} onValueChange={setCooperationFilter}>
+                <SelectTrigger className="w-36 rounded-xl"><SelectValue placeholder='שת"פ' /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">כל השת"פים</SelectItem>
+                  {cooperations.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -107,11 +148,12 @@ export default function Deals() {
                 <TableHead className="text-right">תאריך</TableHead>
                 <TableHead className="text-right">לקוח</TableHead>
                 <TableHead className="text-right">כתובת</TableHead>
-                {isAdmin(user) && <TableHead className="text-right">סוכן</TableHead>}
+                {isAdminView && <TableHead className="text-right">סוכן</TableHead>}
                 <TableHead className="text-right">סכום עסקה</TableHead>
                 <TableHead className="text-right">עמלה</TableHead>
                 <TableHead className="text-right">נגבה</TableHead>
                 <TableHead className="text-right">עמלת סוכן</TableHead>
+                {isAdminView && <TableHead className="text-right">עמלת משרד</TableHead>}
                 <TableHead className="text-right">סטטוס</TableHead>
                 <TableHead className="w-12"></TableHead>
               </TableRow>
@@ -120,7 +162,7 @@ export default function Deals() {
               {isLoading ? (
                 <TableRow><TableCell colSpan={10} className="text-center py-12 text-muted-foreground">טוען...</TableCell></TableRow>
               ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={10} className="text-center py-12 text-muted-foreground">לא נמצאו עסקאות</TableCell></TableRow>
+                <TableRow><TableCell colSpan={isAdminView ? 11 : 9} className="text-center py-12 text-muted-foreground">לא נמצאו עסקאות</TableCell></TableRow>
               ) : filtered.map(deal => {
                 const st = DEAL_STATUS_MAP[deal.status] || DEAL_STATUS_MAP['פתוחה'];
                 return (
@@ -128,11 +170,12 @@ export default function Deals() {
                    <TableCell className="text-sm">{deal.month || '-'}</TableCell>
                    <TableCell className="font-medium text-sm">{deal.client_name}</TableCell>
                    <TableCell className="text-sm text-muted-foreground">{deal.address || '-'}</TableCell>
-                   {isAdmin(user) && <TableCell className="text-sm">{deal.agent_name || '-'}</TableCell>}
+                   {isAdminView && <TableCell className="text-sm">{deal.agent_name || '-'}</TableCell>}
                    <TableCell className="font-semibold text-sm">{formatCurrency(deal.deal_amount)}</TableCell>
                    <TableCell className="text-sm">{formatCurrency(deal.commission_amount)}</TableCell>
                    <TableCell className="text-sm">{formatCurrency(deal.collected_actual)}</TableCell>
                    <TableCell className="text-sm">{formatCurrency(deal.agent_commission)}</TableCell>
+                   {isAdminView && <TableCell className="text-sm font-medium text-primary">{formatCurrency(deal.office_commission)}</TableCell>}
                    <TableCell><Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge></TableCell>
                    <TableCell onClick={e => e.stopPropagation()}>
                      <DropdownMenu>
@@ -141,7 +184,7 @@ export default function Deals() {
                        </DropdownMenuTrigger>
                        <DropdownMenuContent align="start">
                          <DropdownMenuItem onClick={() => setEditDeal(deal)}><Pencil className="w-4 h-4 ml-2" /> עריכה</DropdownMenuItem>
-                         {isAdmin(user) && (
+                         {isAdminView && (
                            <DropdownMenuItem className="text-destructive" onClick={() => { if (window.confirm(`למחוק את העסקה "${deal.client_name}"? פעולה זו אינה ניתנת לביטול.`)) deleteMutation.mutate(deal.id); }}>
                              <Trash2 className="w-4 h-4 ml-2" /> מחיקה
                            </DropdownMenuItem>

@@ -6,16 +6,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, RefreshCw, Building2, Tag, Pencil, Mail, HardDrive, LogOut, User, KeyRound, UserPlus } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Building2, Tag, Pencil, Mail, HardDrive, LogOut, User, KeyRound, Loader2, MapPin, CheckCircle2, Clock, UserCheck, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import { PAYMENT_METHODS } from '@/lib/constants';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { isAdmin } from '@/lib/roles';
+import { useIsAdminView } from '@/hooks/useIsAdminView';
 import { supabase } from '@/lib/supabase';
 
 const COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#14b8a6', '#a855f7', '#3b82f6', '#84cc16', '#d946ef', '#0ea5e9', '#f43f5e', '#eab308', '#22c55e', '#dc2626', '#9ca3af'];
@@ -381,11 +380,56 @@ function CategoriesTab() {
   );
 }
 
+// ---- Areas Settings Tab (admin only) ----
+function AreasSettingsTab() {
+  const [areas, setAreas] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('app_areas') || '["תל אביב","ירושלים","חיפה","הרצליה","רמת גן","פתח תקווה","ראשון לציון","נתניה"]'); } catch { return []; }
+  });
+  const [newArea, setNewArea] = useState('');
+  const [editIdx, setEditIdx] = useState(null);
+  const [editVal, setEditVal] = useState('');
+
+  const save = (list) => { setAreas(list); localStorage.setItem('app_areas', JSON.stringify(list)); };
+  const add = () => { if (!newArea.trim()) return; save([...areas, newArea.trim()]); setNewArea(''); toast.success('האזור נוסף'); };
+  const remove = (i) => { if (window.confirm(`למחוק את "${areas[i]}"?`)) save(areas.filter((_, idx) => idx !== i)); };
+  const saveEdit = () => { const a = [...areas]; a[editIdx] = editVal.trim(); save(a); setEditIdx(null); };
+
+  return (
+    <div className="space-y-4 max-w-md">
+      <div className="flex gap-2">
+        <Input value={newArea} onChange={e => setNewArea(e.target.value)} placeholder="שם אזור חדש" onKeyDown={e => e.key === 'Enter' && add()} className="rounded-xl" />
+        <Button onClick={add} className="gap-2 rounded-xl"><Plus className="w-4 h-4" /> הוסף</Button>
+      </div>
+      <div className="space-y-2">
+        {areas.map((area, i) => (
+          <div key={i} className="flex items-center gap-2 p-3 bg-muted/50 rounded-xl">
+            {editIdx === i ? (
+              <>
+                <Input value={editVal} onChange={e => setEditVal(e.target.value)} className="flex-1 h-8" autoFocus />
+                <Button size="sm" onClick={saveEdit}>שמור</Button>
+                <Button size="sm" variant="ghost" onClick={() => setEditIdx(null)}>ביטול</Button>
+              </>
+            ) : (
+              <>
+                <MapPin className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                <span className="flex-1 text-sm">{area}</span>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditIdx(i); setEditVal(area); }}><Pencil className="w-3.5 h-3.5" /></Button>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => remove(i)}><Trash2 className="w-3.5 h-3.5" /></Button>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ---- Integrations Tab ----
 function IntegrationsTab() {
   const [googleStatus, setGoogleStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [scanning, setScanning] = useState(false);
 
   const getAuthHeaders = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -429,6 +473,30 @@ function IntegrationsTab() {
     toast.success('Google נותק');
   };
 
+  const handleScanGmail = async () => {
+    setScanning(true);
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/google/scan-gmail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'שגיאה בסריקה');
+      if (data.created > 0) {
+        toast.success(`נמצאו ${data.found} מיילים חדשים — ${data.created} חשבוניות נוספו לתיבת הדואר (עמוד הוצאות → חשבוניות ממייל)`);
+      } else if (data.found > 0) {
+        toast.info(`נמצאו ${data.found} מיילים אך לא זוהו קבצים חדשים`);
+      } else {
+        toast.info('לא נמצאו קבלות חדשות במייל (30 ימים אחרונים)');
+      }
+    } catch (err) {
+      toast.error(err.message || 'שגיאה בסריקת Gmail');
+    } finally {
+      setScanning(false);
+    }
+  };
+
   const GoogleIcon = () => (
     <svg className="w-4 h-4" viewBox="0 0 24 24">
       <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -443,6 +511,36 @@ function IntegrationsTab() {
       <p className="text-sm text-muted-foreground">
         חבר את חשבון Google שלך כדי לשמור קבלות ב-Drive ולסרוק קבלות שמגיעות למייל.
       </p>
+
+      {/* Drive Mode (admin) */}
+      {googleStatus?.connected && (
+        <Card className="rounded-2xl bg-muted/40">
+          <CardContent className="p-4">
+            <p className="text-xs font-semibold text-muted-foreground mb-3">הגדרות שמירת קבצים ב-Drive</p>
+            <div className="flex flex-col gap-2">
+              {[
+                { value: 'personal', label: 'דרייב אישי לכל סוכן', desc: 'כל סוכן מחבר את הדרייב שלו' },
+                { value: 'central', label: 'דרייב מרכזי של המשרד', desc: 'כל הקבלות נשמרות בדרייב אחד' },
+              ].map(opt => {
+                const driveMode = localStorage.getItem('drive_mode') || 'personal';
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => { localStorage.setItem('drive_mode', opt.value); toast.success('ההגדרה נשמרה'); }}
+                    className={`flex items-center gap-3 p-3 rounded-xl border-2 text-right transition-all ${driveMode === opt.value ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'}`}
+                  >
+                    <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${driveMode === opt.value ? 'border-primary bg-primary' : 'border-muted-foreground'}`} />
+                    <div>
+                      <p className="text-sm font-medium">{opt.label}</p>
+                      <p className="text-xs text-muted-foreground">{opt.desc}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Google Drive */}
       <Card className="rounded-2xl">
@@ -518,7 +616,16 @@ function IntegrationsTab() {
                 )}
               </div>
             </div>
-            {!googleStatus?.connected && (
+            {googleStatus?.connected ? (
+              <Button
+                className="rounded-xl gap-2"
+                onClick={handleScanGmail}
+                disabled={scanning}
+              >
+                {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                {scanning ? 'סורק...' : 'סרוק עכשיו'}
+              </Button>
+            ) : (
               <Button className="rounded-xl gap-2" onClick={handleConnect} disabled={loading}>
                 <GoogleIcon /> התחבר
               </Button>
@@ -530,78 +637,207 @@ function IntegrationsTab() {
   );
 }
 
-// ---- Invite User Tab (admin only) ----
-function InviteTab() {
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState('agent');
-  const [loading, setLoading] = useState(false);
+// ---- Agent Permissions Tab (admin only) ----
+function AgentPermissionsTab() {
+  const queryClient = useQueryClient();
 
-  const handleInvite = async () => {
-    if (!email) return;
-    setLoading(true);
-    try {
-      await base44.users.inviteUser(email, role);
-      toast.success(`הזמנה נשלחה ל-${email}`);
-      setEmail('');
-    } catch {
-      toast.error('שגיאה בשליחת הזמנה');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: pending = [], isLoading } = useQuery({
+    queryKey: ['pending-profiles'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, phone, role, is_approved')
+        .eq('is_approved', false)
+        .eq('role', 'agent');
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: async (profile) => {
+      const { error } = await supabase.from('profiles').update({ is_approved: true }).eq('id', profile.id);
+      if (error) throw error;
+      try {
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: profile.email, type: 'agent_approved', data: { name: profile.full_name } }),
+        });
+      } catch { /* non-fatal */ }
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['pending-profiles'] }); toast.success('הסוכן אושר בהצלחה'); },
+    onError: () => toast.error('שגיאה באישור הסוכן'),
+  });
+
+  if (isLoading) return <div className="text-center py-12 text-muted-foreground">טוען...</div>;
+
+  if (pending.length === 0) {
+    return (
+      <div className="text-center py-16 text-muted-foreground">
+        <CheckCircle2 className="w-10 h-10 mx-auto mb-3 text-emerald-500" />
+        <p className="font-medium">אין סוכנים ממתינים לאישור</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-4 max-w-md">
-      <Card className="rounded-2xl">
-        <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><UserPlus className="w-4 h-4" /> הזמנת משתמש חדש</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-1"><Label className="text-xs">כתובת אימייל</Label><Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="agent@example.com" className="rounded-xl" /></div>
-          <div className="space-y-1">
-            <Label className="text-xs">תפקיד</Label>
-            <Select value={role} onValueChange={setRole}>
-              <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="agent">סוכן</SelectItem>
-                <SelectItem value="admin">מנהל</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <Button onClick={handleInvite} disabled={!email || loading} className="w-full rounded-xl gap-2">
-            <UserPlus className="w-4 h-4" /> שלח הזמנה
-          </Button>
-          <p className="text-xs text-muted-foreground">המשתמש יקבל מייל עם קישור לכניסה. לאחר הכניסה, חבר אותו לכרטיס סוכן בעמוד הסוכנים.</p>
-        </CardContent>
-      </Card>
+    <div className="space-y-3 max-w-xl">
+      <p className="text-sm text-muted-foreground flex items-center gap-2">
+        <Clock className="w-4 h-4 text-amber-500" />
+        {pending.length} סוכנים ממתינים לאישור גישה
+      </p>
+      {pending.map(p => (
+        <Card key={p.id} className="rounded-2xl border-amber-200 bg-amber-50/50">
+          <CardContent className="p-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-amber-100 rounded-xl">
+                <UserCheck className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <p className="font-semibold">{p.full_name || 'ללא שם'}</p>
+                <p className="text-sm text-muted-foreground">{p.phone || ''}</p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              className="gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700"
+              onClick={() => approveMutation.mutate(p)}
+              disabled={approveMutation.isPending}
+            >
+              <CheckCircle2 className="w-4 h-4" /> אשר גישה
+            </Button>
+          </CardContent>
+        </Card>
+      ))}
     </div>
   );
 }
 
+// ---- Settings Card Grid ----
+const SETTINGS_SECTIONS = {
+  profile: {
+    key: 'profile',
+    title: 'פרופיל',
+    desc: 'שם, לוגו, סיסמה',
+    icon: User,
+    iconBg: 'bg-blue-50',
+    iconColor: 'text-blue-500',
+    adminOnly: false,
+  },
+  recurring: {
+    key: 'recurring',
+    title: 'הוצאות קבועות',
+    desc: 'תוכנית, תאריך סיום, סיסמה',
+    icon: RefreshCw,
+    iconBg: 'bg-orange-50',
+    iconColor: 'text-orange-500',
+    adminOnly: false,
+  },
+  integrations: {
+    key: 'integrations',
+    title: 'חיבורים',
+    desc: 'Google Drive, Gmail',
+    icon: Mail,
+    iconBg: 'bg-violet-50',
+    iconColor: 'text-violet-500',
+    adminOnly: false,
+  },
+  areas: {
+    key: 'areas',
+    title: 'אזורים',
+    desc: 'הגדרות, אזורים, קדימות, מפה',
+    icon: MapPin,
+    iconBg: 'bg-emerald-50',
+    iconColor: 'text-emerald-500',
+    adminOnly: true,
+  },
+  categories: {
+    key: 'categories',
+    title: 'קטגוריות',
+    desc: 'כספים, מתפללים, אירועים',
+    icon: Tag,
+    iconBg: 'bg-amber-50',
+    iconColor: 'text-amber-500',
+    adminOnly: true,
+  },
+  permissions: {
+    key: 'permissions',
+    title: 'גישה והרשאות',
+    desc: 'גישה, הרשאות ותפקידים',
+    icon: Shield,
+    iconBg: 'bg-purple-50',
+    iconColor: 'text-purple-500',
+    adminOnly: true,
+  },
+};
+
 // ---- Main Settings Page ----
 export default function Settings() {
   const { user } = useCurrentUser();
-  const admin = isAdmin(user);
+  const admin = useIsAdminView();
+  const [activeSection, setActiveSection] = useState(null);
+
+  const visibleSections = Object.values(SETTINGS_SECTIONS).filter(s => !s.adminOnly || admin);
+  const current = activeSection ? SETTINGS_SECTIONS[activeSection] : null;
+
+  if (current) {
+    const Icon = current.icon;
+    return (
+      <div className="space-y-6">
+        <div>
+          <button
+            onClick={() => setActiveSection(null)}
+            className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1.5 mb-4 transition-colors"
+          >
+            <span className="text-base leading-none">›</span> הגדרות
+          </button>
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${current.iconBg}`}>
+              <Icon className={`w-5 h-5 ${current.iconColor}`} />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">{current.title}</h1>
+              <p className="text-sm text-muted-foreground">{current.desc}</p>
+            </div>
+          </div>
+        </div>
+
+        {activeSection === 'profile' && <ProfileTab />}
+        {activeSection === 'recurring' && <RecurringTab />}
+        {activeSection === 'integrations' && <IntegrationsTab />}
+        {activeSection === 'areas' && admin && <AreasSettingsTab />}
+        {activeSection === 'categories' && admin && <CategoriesTab />}
+        {activeSection === 'permissions' && admin && <AgentPermissionsTab />}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">הגדרות</h1>
+      <div>
+        <h1 className="text-2xl font-bold">הגדרות</h1>
+        <p className="text-sm text-muted-foreground mt-1">הגדרות מערכת ובית כנסת</p>
+      </div>
 
-      <Tabs defaultValue="profile">
-        <TabsList className="rounded-xl flex-wrap h-auto gap-1">
-          <TabsTrigger value="profile" className="gap-2 rounded-lg"><User className="w-4 h-4" /> פרופיל</TabsTrigger>
-          {admin && <TabsTrigger value="invite" className="gap-2 rounded-lg"><UserPlus className="w-4 h-4" /> הזמנת משתמשים</TabsTrigger>}
-          <TabsTrigger value="recurring" className="gap-2 rounded-lg"><RefreshCw className="w-4 h-4" /> הוצאות קבועות</TabsTrigger>
-          {admin && <TabsTrigger value="vendors" className="gap-2 rounded-lg"><Building2 className="w-4 h-4" /> ספקים</TabsTrigger>}
-          <TabsTrigger value="categories" className="gap-2 rounded-lg"><Tag className="w-4 h-4" /> קטגוריות</TabsTrigger>
-          <TabsTrigger value="integrations" className="gap-2 rounded-lg"><Mail className="w-4 h-4" /> חיבורי Google</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="profile" className="mt-4"><ProfileTab /></TabsContent>
-        {admin && <TabsContent value="invite" className="mt-4"><InviteTab /></TabsContent>}
-        <TabsContent value="recurring" className="mt-4"><RecurringTab /></TabsContent>
-        {admin && <TabsContent value="vendors" className="mt-4"><VendorsTab /></TabsContent>}
-        <TabsContent value="categories" className="mt-4"><CategoriesTab /></TabsContent>
-        <TabsContent value="integrations" className="mt-4"><IntegrationsTab /></TabsContent>
-      </Tabs>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {visibleSections.map(section => {
+          const Icon = section.icon;
+          return (
+            <button
+              key={section.key}
+              onClick={() => setActiveSection(section.key)}
+              className="bg-white border border-border rounded-2xl p-6 text-right hover:shadow-md hover:border-primary/20 transition-all group"
+            >
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 ${section.iconBg} group-hover:scale-105 transition-transform`}>
+                <Icon className={`w-6 h-6 ${section.iconColor}`} />
+              </div>
+              <p className="font-bold text-base">{section.title}</p>
+              <p className="text-sm text-muted-foreground mt-0.5">{section.desc}</p>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

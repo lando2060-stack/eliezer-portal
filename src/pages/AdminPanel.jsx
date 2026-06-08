@@ -457,19 +457,15 @@ export default function AdminPanel() {
         </div>
       </div>
 
-      <Tabs defaultValue="reports">
+      <Tabs defaultValue="reports" className="w-full">
         <TabsList className="rounded-xl flex-wrap h-auto gap-1">
           <TabsTrigger value="reports" className="gap-2 rounded-lg"><BarChart3 className="w-4 h-4" /> דוחות</TabsTrigger>
           <TabsTrigger value="agents" className="gap-2 rounded-lg"><Users className="w-4 h-4" /> סוכנים</TabsTrigger>
-          <TabsTrigger value="pending" className="gap-2 rounded-lg"><CheckCircle2 className="w-4 h-4" /> ממתינים לאישור</TabsTrigger>
           <TabsTrigger value="areas" className="gap-2 rounded-lg"><MapPin className="w-4 h-4" /> אזורים</TabsTrigger>
-          <TabsTrigger value="export" className="gap-2 rounded-lg"><Download className="w-4 h-4" /> ייצוא</TabsTrigger>
         </TabsList>
         <TabsContent value="reports" className="mt-4"><ReportsTab /></TabsContent>
         <TabsContent value="agents" className="mt-4"><AgentsTab /></TabsContent>
-        <TabsContent value="pending" className="mt-4"><PendingAgentsTab /></TabsContent>
         <TabsContent value="areas" className="mt-4"><AreasTab /></TabsContent>
-        <TabsContent value="export" className="mt-4"><ExportTab /></TabsContent>
       </Tabs>
     </div>
   );

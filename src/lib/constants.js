@@ -14,6 +14,7 @@ export const STATUS_MAP = {
   missing_receipt: { label: 'חסרה קבלה', color: 'bg-red-100 text-red-700' },
   rejected: { label: 'נדחה', color: 'bg-gray-100 text-gray-600' },
   paid: { label: 'שולמה', color: 'bg-blue-100 text-blue-800' },
+  gmail_inbox: { label: 'ממייל — טרם עובד', color: 'bg-violet-100 text-violet-800' },
 };
 
 export const DEAL_STATUS_MAP = {

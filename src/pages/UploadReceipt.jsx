@@ -298,9 +298,11 @@ export default function UploadReceipt() {
                     <div className="flex items-center justify-between mb-3">
                       <p className="text-sm font-medium">תצוגת קבלה</p>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setRotation(r => r + 90)}>
-                          <RotateCw className="w-4 h-4" />
-                        </Button>
+                        {!(file?.type === 'application/pdf' || file?.name?.toLowerCase().endsWith('.pdf')) && (
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setRotation(r => r + 90)}>
+                            <RotateCw className="w-4 h-4" />
+                          </Button>
+                        )}
                         {fileUrl && (
                           <a href={fileUrl} target="_blank" rel="noopener noreferrer">
                             <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -311,12 +313,20 @@ export default function UploadReceipt() {
                       </div>
                     </div>
                     <div className="bg-muted rounded-xl overflow-hidden flex items-center justify-center min-h-[400px]">
-                      <img
-                        src={previewUrl}
-                        alt="קבלה"
-                        className="max-w-full max-h-[600px] object-contain transition-transform"
-                        style={{ transform: `rotate(${rotation}deg)` }}
-                      />
+                      {file?.type === 'application/pdf' || file?.name?.toLowerCase().endsWith('.pdf') ? (
+                        <iframe
+                          src={previewUrl}
+                          className="w-full h-[600px] rounded-xl"
+                          title="קבלה"
+                        />
+                      ) : (
+                        <img
+                          src={previewUrl}
+                          alt="קבלה"
+                          className="max-w-full max-h-[600px] object-contain transition-transform"
+                          style={{ transform: `rotate(${rotation}deg)` }}
+                        />
+                      )}
                     </div>
                   </CardContent>
                 </Card>

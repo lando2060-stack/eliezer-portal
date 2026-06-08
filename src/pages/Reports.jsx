@@ -10,8 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Download, TrendingUp, TrendingDown, DollarSign, FileText, Loader2, Wallet } from 'lucide-react';
 import { formatCurrency, DEAL_STATUS_MAP, STATUS_MAP } from '@/lib/constants';
-import { isAdmin } from '@/lib/roles';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { useIsAdminView } from '@/hooks/useIsAdminView';
 import { toast } from 'sonner';
 import { downloadCSV } from '@/lib/csv';
 import { format } from 'date-fns';
@@ -83,6 +83,7 @@ function KpiCard({ label, value, icon: Icon, color }) {
 
 export default function Reports() {
   const { user } = useCurrentUser();
+  const isAdminView = useIsAdminView();
   const [selectedAgent, setSelectedAgent] = useState('all');
   const [datePreset, setDatePreset] = useState('this_month');
   const [customFrom, setCustomFrom] = useState('');
@@ -99,7 +100,7 @@ export default function Reports() {
   // ── הכנסות (deals) ───────────────────────────────────────
   const deals = useMemo(() => {
     let d = allDeals;
-    if (!isAdmin(user)) d = d.filter(x => x.agent_id === myAgent?.id);
+    if (!isAdminView) d = d.filter(x => x.agent_id === myAgent?.id);
     if (selectedAgent !== 'all') d = d.filter(x => x.agent_id === selectedAgent);
     // filter by month field
     if (datePreset === 'all') return d;
@@ -113,15 +114,15 @@ export default function Reports() {
     }
     const months = getPresetMonths(datePreset);
     return d.filter(x => months?.includes(x.month));
-  }, [allDeals, user, myAgent, selectedAgent, datePreset, customFrom, customTo]);
+  }, [allDeals, isAdminView, myAgent, selectedAgent, datePreset, customFrom, customTo]);
 
   // ── הוצאות ───────────────────────────────────────────────
   const expenses = useMemo(() => {
     let e = allExpenses;
-    if (!isAdmin(user)) e = e.filter(x => x.agent_id === myAgent?.id || x.created_by_id === user?.id);
-    if (isAdmin(user) && selectedAgent !== 'all') e = e.filter(x => x.agent_id === selectedAgent);
+    if (!isAdminView) e = e.filter(x => x.agent_id === myAgent?.id || x.created_by_id === user?.id);
+    if (isAdminView && selectedAgent !== 'all') e = e.filter(x => x.agent_id === selectedAgent);
     return filterByDate(e, 'date', datePreset, customFrom, customTo);
-  }, [allExpenses, user, myAgent, selectedAgent, datePreset, customFrom, customTo]);
+  }, [allExpenses, isAdminView, user?.id, myAgent, selectedAgent, datePreset, customFrom, customTo]);
 
   // ── KPIs ─────────────────────────────────────────────────
   const incomeStats = useMemo(() => ({
@@ -171,7 +172,7 @@ export default function Reports() {
       const imgW = pageW - 20;
       const imgH = (canvas.height * imgW) / canvas.width;
       pdf.addImage(imgData, 'PNG', 10, 10, imgW, imgH);
-      pdf.save(`כספים_${datePreset}.pdf`);
+      pdf.save(`הכנסות_${datePreset}.pdf`);
       toast.success('הדוח יוצא בהצלחה');
     } catch { toast.error('שגיאה בייצוא'); }
     finally { setExporting(false); }
@@ -180,7 +181,7 @@ export default function Reports() {
   // ── Shared filters bar ───────────────────────────────────
   const FiltersBar = ({ onExportCSV }) => (
     <div className="flex gap-2 flex-wrap">
-      {isAdmin(user) && (
+      {isAdminView && (
         <Select value={selectedAgent} onValueChange={setSelectedAgent}>
           <SelectTrigger className="w-36 rounded-xl"><SelectValue placeholder="כל הסוכנים" /></SelectTrigger>
           <SelectContent>
@@ -215,7 +216,7 @@ export default function Reports() {
       {/* Header + summary KPIs */}
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Wallet className="w-6 h-6 text-primary" /> כספים
+          <Wallet className="w-6 h-6 text-primary" /> הכנסות
         </h1>
         <p className="text-muted-foreground text-sm mt-1">הכנסות והוצאות בתקופה הנבחרת</p>
       </div>
@@ -224,8 +225,8 @@ export default function Reports() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCard label="סה״כ עמלות" value={formatCurrency(incomeStats.totalCommission)} icon={TrendingUp} color="bg-emerald-100 text-emerald-600" />
         <KpiCard label="סה״כ הוצאות" value={formatCurrency(expenseStats.total)} icon={TrendingDown} color="bg-red-100 text-red-600" />
-        <KpiCard label={isAdmin(user) ? 'רווח משרד' : 'עמלה שלי'} value={formatCurrency(isAdmin(user) ? incomeStats.totalOfficeComm : incomeStats.totalAgentComm)} icon={DollarSign} color="bg-blue-100 text-blue-600" />
-        {isAdmin(user)
+        <KpiCard label={isAdminView ? 'רווח משרד' : 'עמלה שלי'} value={formatCurrency(isAdminView ? incomeStats.totalOfficeComm : incomeStats.totalAgentComm)} icon={DollarSign} color="bg-blue-100 text-blue-600" />
+        {isAdminView
           ? <KpiCard label="רווח נקי (משוער)" value={formatCurrency(netProfit)} icon={Wallet} color={netProfit >= 0 ? 'bg-purple-100 text-purple-600' : 'bg-orange-100 text-orange-600'} />
           : <KpiCard label="הוצאות ממתינות" value={expenseStats.pending} icon={FileText} color="bg-amber-100 text-amber-600" />
         }
@@ -248,12 +249,12 @@ export default function Reports() {
             <p className="text-sm text-muted-foreground">
               עמלות: <strong>{formatCurrency(incomeStats.totalCommission)}</strong> •
               נגבה: <strong>{formatCurrency(incomeStats.totalCollected)}</strong>
-              {isAdmin(user) && <> • משרד: <strong>{formatCurrency(incomeStats.totalOfficeComm)}</strong></>}
+              {isAdminView && <> • משרד: <strong>{formatCurrency(incomeStats.totalOfficeComm)}</strong></>}
             </p>
             <FiltersBar onExportCSV={exportDealsCSV} />
           </div>
 
-          {isAdmin(user) && selectedAgent === 'all' && (
+          {isAdminView && selectedAgent === 'all' && (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {agents.filter(a => deals.some(d => d.agent_id === a.id)).map(a => {
                 const ad = deals.filter(d => d.agent_id === a.id);
@@ -277,11 +278,11 @@ export default function Reports() {
                   <TableRow className="bg-muted/50">
                     <TableHead className="text-right">חודש</TableHead>
                     <TableHead className="text-right">לקוח</TableHead>
-                    {isAdmin(user) && <TableHead className="text-right">סוכן</TableHead>}
+                    {isAdminView && <TableHead className="text-right">סוכן</TableHead>}
                     <TableHead className="text-right">סכום עסקה</TableHead>
                     <TableHead className="text-right">עמלה</TableHead>
                     <TableHead className="text-right">עמלת סוכן</TableHead>
-                    {isAdmin(user) && <TableHead className="text-right">עמלת משרד</TableHead>}
+                    {isAdminView && <TableHead className="text-right">עמלת משרד</TableHead>}
                     <TableHead className="text-right">סטטוס</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -294,11 +295,11 @@ export default function Reports() {
                       <TableRow key={d.id}>
                         <TableCell className="text-sm">{d.month}</TableCell>
                         <TableCell className="font-medium text-sm">{d.client_name}</TableCell>
-                        {isAdmin(user) && <TableCell className="text-sm text-muted-foreground">{d.agent_name}</TableCell>}
+                        {isAdminView && <TableCell className="text-sm text-muted-foreground">{d.agent_name}</TableCell>}
                         <TableCell className="text-sm">{formatCurrency(d.deal_amount)}</TableCell>
                         <TableCell className="text-sm font-semibold">{formatCurrency(d.commission_amount)}</TableCell>
                         <TableCell className="text-sm text-emerald-700">{formatCurrency(d.agent_commission)}</TableCell>
-                        {isAdmin(user) && <TableCell className="text-sm text-primary">{formatCurrency(d.office_commission)}</TableCell>}
+                        {isAdminView && <TableCell className="text-sm text-primary">{formatCurrency(d.office_commission)}</TableCell>}
                         <TableCell><Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge></TableCell>
                       </TableRow>
                     );
@@ -328,7 +329,7 @@ export default function Reports() {
                     <TableHead className="text-right">ספק</TableHead>
                     <TableHead className="text-right">קטגוריה</TableHead>
                     <TableHead className="text-right">סכום</TableHead>
-                    {isAdmin(user) && <TableHead className="text-right">סוכן</TableHead>}
+                    {isAdminView && <TableHead className="text-right">סוכן</TableHead>}
                     <TableHead className="text-right">סטטוס</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -343,7 +344,7 @@ export default function Reports() {
                         <TableCell className="font-medium text-sm">{e.vendor_name || '-'}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{e.category || '-'}</TableCell>
                         <TableCell className="text-sm font-semibold text-red-600">{formatCurrency(e.total_amount)}</TableCell>
-                        {isAdmin(user) && <TableCell className="text-sm text-muted-foreground">{e.agent_name || '-'}</TableCell>}
+                        {isAdminView && <TableCell className="text-sm text-muted-foreground">{e.agent_name || '-'}</TableCell>}
                         <TableCell><Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge></TableCell>
                       </TableRow>
                     );

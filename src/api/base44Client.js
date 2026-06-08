@@ -112,10 +112,12 @@ const authApi = {
 const BUCKET = 'receipts';
 
 async function uploadFile({ file }) {
-  const ext = file.name.split('.').pop();
+  const ext = file.name.split('.').pop().toLowerCase();
+  const mimeMap = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+  const contentType = file.type || mimeMap[ext] || 'application/octet-stream';
   const path = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
   const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
-    contentType: file.type,
+    contentType,
     upsert: false,
   });
   if (error) throw error;

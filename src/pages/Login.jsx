@@ -19,7 +19,8 @@ export default function Login() {
     setLoading(true);
     try {
       await base44.auth.loginViaEmailPassword(email, password);
-      window.location.href = "/";
+      const profile = await base44.auth.me();
+      window.location.href = profile?.role === 'admin' ? "/admin/dashboard" : "/";
     } catch {
       setError("כתובת האימייל או הסיסמה שגויים");
     } finally {

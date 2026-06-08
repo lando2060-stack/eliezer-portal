@@ -1,48 +1,25 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, FileText, Receipt, Wallet, Settings, Plus, X, Upload, PenLine, DollarSign } from 'lucide-react';
-import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { isAdmin } from '@/lib/roles';
-import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
 
-const agentNav = [
-  { path: '/', label: 'דשבורד', icon: LayoutDashboard },
-  { path: '/deals', label: 'עסקאות', icon: FileText },
-  { path: '/expenses', label: 'הוצאות', icon: Receipt },
-  { path: '/reports', label: 'כספים', icon: Wallet },
-  { path: '/settings', label: 'הגדרות', icon: Settings },
-];
-
-const adminNav = [
-  { path: '/', label: 'דשבורד', icon: LayoutDashboard },
-  { path: '/deals', label: 'עסקאות', icon: FileText },
-  { path: '/expenses', label: 'הוצאות', icon: Receipt },
-  { path: '/reports', label: 'כספים', icon: Wallet },
-  { path: '/settings', label: 'הגדרות', icon: Settings },
+const navItems = [
+  { path: '/',         label: 'דשבורד',  icon: LayoutDashboard },
+  { path: '/deals',    label: 'עסקאות',  icon: FileText },
+  { path: '/expenses', label: 'הוצאות',  icon: Receipt },
+  { path: '/reports',  label: 'הכנסות',  icon: Wallet },
+  { path: '/settings', label: 'הגדרות',  icon: Settings },
 ];
 
 const fabActions = [
-  { path: '/deals?new=1', label: 'עסקה חדשה', icon: PenLine, color: 'bg-blue-500' },
-  { path: '/deals?income=1', label: 'הכנסה חדשה', icon: DollarSign, color: 'bg-emerald-500' },
-  { path: '/upload', label: 'העלאת קבלה', icon: Upload, color: 'bg-amber-500' },
-  { path: '/expenses?new=1', label: 'הוצאה ידנית', icon: Receipt, color: 'bg-purple-500' },
+  { path: '/deals?new=1',    label: 'עסקה חדשה',   icon: PenLine,  color: 'bg-blue-500' },
+  { path: '/deals?income=1', label: 'הכנסה חדשה',  icon: DollarSign, color: 'bg-emerald-500' },
+  { path: '/upload',         label: 'העלאת קבלה',  icon: Upload,   color: 'bg-amber-500' },
+  { path: '/expenses?new=1', label: 'הוצאה ידנית', icon: Receipt,  color: 'bg-purple-500' },
 ];
 
 export default function BottomNav() {
   const location = useLocation();
   const [fabOpen, setFabOpen] = useState(false);
-  const { user } = useCurrentUser();
-  const admin = isAdmin(user);
-
-  const { data: expenses = [] } = useQuery({
-    queryKey: ['expenses'],
-    queryFn: () => base44.entities.Expense.list('-date', 500),
-    enabled: admin,
-  });
-  const pendingCount = admin ? expenses.filter(e => e.status === 'pending_approval').length : 0;
-
-  const navItems = admin ? adminNav : agentNav;
 
   return (
     <>
@@ -87,22 +64,13 @@ export default function BottomNav() {
               );
             }
 
-            const showBadge = admin && item.path === '/expenses' && pendingCount > 0;
-
             return (
               <Link
                 key={item.path}
                 to={item.path}
                 className={`relative flex flex-col items-center gap-1 px-3 py-1 rounded-xl transition-colors ${isActive ? 'text-primary' : 'text-muted-foreground'}`}
               >
-                <div className="relative">
-                  <item.icon className={`w-5 h-5 ${isActive ? 'text-primary' : ''}`} />
-                  {showBadge && (
-                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                      {pendingCount > 9 ? '9+' : pendingCount}
-                    </span>
-                  )}
-                </div>
+                <item.icon className={`w-5 h-5 ${isActive ? 'text-primary' : ''}`} />
                 <span className="text-xs">{item.label}</span>
               </Link>
             );
