@@ -2,112 +2,93 @@
  * POST /api/extract-receipt
  * Body: { file_url: string, json_schema?: object }
  *
- * Images → passes URL directly to GPT-4o Vision (fast, no download).
- * PDFs   → downloads, extracts text with pdf-parse, sends as text prompt
- *           (works reliably for all digitally-generated Israeli invoices).
+ * Uses Gemini 2.0 Flash — supports images AND PDFs natively.
+ * Downloads the file, sends as inline_data (base64) → always works
+ * regardless of bucket visibility.
  */
-import pdfParse from 'pdf-parse/lib/pdf-parse.js';
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { file_url, json_schema } = req.body;
   if (!file_url) return res.status(400).json({ error: 'file_url is required' });
 
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'OPENAI_API_KEY not configured' });
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
 
   const schemaStr = json_schema ? JSON.stringify(json_schema) : null;
   const extractInstruction = schemaStr
     ? `Return a JSON object matching this schema: ${schemaStr}`
     : 'Return a JSON object with all relevant receipt/invoice fields.';
 
-  const basePrompt = `You are a receipt/invoice data extractor for an Israeli real-estate agency.
+  const prompt = `You are a receipt/invoice data extractor for an Israeli real-estate agency.
 ${extractInstruction}
 Rules:
 - Dates → YYYY-MM-DD
-- Amounts → plain numbers (no ₪ symbols)
+- Amounts → plain numbers, no ₪ symbols
 - Currency → ILS unless clearly otherwise
-- Omit fields that are not present
+- Omit fields that are not present in the document
 Return ONLY valid JSON — no markdown, no explanation.`;
 
   try {
-    const isPdf = /\.pdf(\?|$)/i.test(file_url) || file_url.toLowerCase().includes('pdf');
+    // Download the file
+    const fileRes = await fetch(file_url);
+    if (!fileRes.ok) throw new Error(`Failed to fetch file: ${fileRes.status}`);
+    const buf = await fileRes.arrayBuffer();
+    const base64 = Buffer.from(buf).toString('base64');
 
-    let messages;
-
-    if (isPdf) {
-      // ── PDF: extract text, send as text prompt ────────────────────────────
-      let pdfText = '';
-      try {
-        const resp = await fetch(file_url);
-        if (!resp.ok) throw new Error(`fetch ${resp.status}`);
-        const buf = Buffer.from(await resp.arrayBuffer());
-        const parsed = await pdfParse(buf);
-        pdfText = parsed.text?.trim() || '';
-      } catch (e) {
-        console.error('PDF text extraction failed:', e.message);
-      }
-
-      if (!pdfText) {
-        return res.status(200).json({ status: 'error', output: null, detail: 'Could not extract text from PDF' });
-      }
-
-      messages = [
-        {
-          role: 'user',
-          content: `${basePrompt}\n\nPDF text content:\n---\n${pdfText.slice(0, 6000)}\n---`,
-        },
-      ];
-    } else {
-      // ── Image: pass URL directly to Vision ───────────────────────────────
-      messages = [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: basePrompt },
-            { type: 'image_url', image_url: { url: file_url, detail: 'high' } },
-          ],
-        },
-      ];
+    // Determine MIME type
+    const ct = fileRes.headers.get('content-type') || '';
+    let mimeType = ct.split(';')[0].trim();
+    if (!mimeType || mimeType === 'application/octet-stream') {
+      const lower = file_url.toLowerCase();
+      if (lower.includes('.pdf')) mimeType = 'application/pdf';
+      else if (lower.includes('.png')) mimeType = 'image/png';
+      else if (lower.includes('.webp')) mimeType = 'image/webp';
+      else mimeType = 'image/jpeg';
     }
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages,
-        max_tokens: 1000,
-        temperature: 0,
-      }),
-    });
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: prompt },
+              { inline_data: { mime_type: mimeType, data: base64 } },
+            ],
+          }],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0,
+          },
+        }),
+      }
+    );
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error('OpenAI error:', errText);
+      console.error('Gemini error:', errText);
       return res.status(200).json({ status: 'error', output: null, detail: errText.slice(0, 300) });
     }
 
     const data = await response.json();
-    const rawContent = data.choices?.[0]?.message?.content?.trim() || '';
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+
+    if (!content) {
+      return res.status(200).json({ status: 'error', output: null, detail: 'Empty response from Gemini' });
+    }
 
     try {
-      const jsonStr = rawContent
-        .replace(/^```json\s*/i, '')
-        .replace(/^```\s*/i, '')
-        .replace(/\s*```$/, '')
-        .trim();
-      const output = JSON.parse(jsonStr);
+      // Gemini with responseMimeType:application/json returns clean JSON
+      const output = JSON.parse(content);
       if (typeof output !== 'object' || output === null || Array.isArray(output)) {
         throw new Error('not an object');
       }
       return res.status(200).json({ status: 'success', output });
     } catch {
-      console.error('JSON parse failed. Raw:', rawContent.slice(0, 500));
+      console.error('JSON parse failed. Raw:', content.slice(0, 300));
       return res.status(200).json({ status: 'error', output: null, detail: 'JSON parse failed' });
     }
   } catch (err) {
