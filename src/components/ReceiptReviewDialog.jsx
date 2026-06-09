@@ -183,10 +183,19 @@ export default function ReceiptReviewDialog({
 
   const saveMutation = useMutation({
     mutationFn: async (data) => {
+      // Normalize date: DD/MM/YYYY or D/M/YYYY → YYYY-MM-DD
+      const normalizeDate = (d) => {
+        if (!d) return '';
+        if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d; // already ISO
+        const m = d.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+        if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+        return d;
+      };
+
       const payload = {
         vendor_name:      data.vendor_name || '',
         vendor_tax_id:    data.vendor_tax_id || '',
-        date:             data.date || '',
+        date:             normalizeDate(data.date),
         receipt_number:   data.receipt_number || '',
         invoice_number:   data.invoice_number || '',
         total_amount:     parseFloat(data.total_amount) || 0,
@@ -202,8 +211,6 @@ export default function ReceiptReviewDialog({
         scope:            'office',
         agent_id:         data.agent_id || '',
         agent_name:       data.agent_name || '',
-        vendor_address:   data.vendor_address || '',
-        vendor_phone:     data.vendor_phone || '',
       };
 
       let expense;
@@ -400,11 +407,19 @@ export default function ReceiptReviewDialog({
                   </div>
                   {isPdf ? (
                     <div className="bg-muted rounded-xl overflow-hidden" style={{ height: 520 }}>
-                      <iframe
-                        src={`https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl || initialReceiptUrl)}&embedded=true`}
-                        className="w-full h-full rounded-xl border-0"
-                        title="PDF קבלה"
-                      />
+                      {pdfBlobUrl ? (
+                        <embed
+                          src={pdfBlobUrl}
+                          type="application/pdf"
+                          className="w-full rounded-xl"
+                          style={{ height: 520 }}
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center gap-3 h-full text-muted-foreground">
+                          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                          <p className="text-sm">טוען PDF...</p>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="bg-muted rounded-xl overflow-hidden flex items-center justify-center min-h-[300px] max-h-[520px]">
