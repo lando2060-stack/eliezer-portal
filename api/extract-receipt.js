@@ -71,13 +71,32 @@ Return ONLY valid JSON — no markdown, no explanation.`;
     const content = data.content?.[0]?.text?.trim() || '';
 
     try {
-      const jsonStr = content.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/, '').trim();
-      const output = JSON.parse(jsonStr);
-      if (typeof output !== 'object' || output === null || Array.isArray(output)) throw new Error('not object');
+      // Try multiple strategies to extract JSON
+      let output = null;
+
+      // 1. Direct parse
+      try { output = JSON.parse(content); } catch {}
+
+      // 2. Strip markdown code block
+      if (!output) {
+        const stripped = content.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/m, '').trim();
+        try { output = JSON.parse(stripped); } catch {}
+      }
+
+      // 3. Find first {...} block anywhere in the text
+      if (!output) {
+        const match = content.match(/\{[\s\S]*\}/);
+        if (match) try { output = JSON.parse(match[0]); } catch {}
+      }
+
+      if (!output || typeof output !== 'object' || Array.isArray(output)) {
+        console.error('JSON parse failed. Raw:', content.slice(0, 500));
+        return res.status(200).json({ status: 'error', output: null, detail: `JSON parse failed. Claude said: ${content.slice(0, 200)}` });
+      }
+
       return res.status(200).json({ status: 'success', output });
-    } catch {
-      console.error('JSON parse failed:', content.slice(0, 300));
-      return res.status(200).json({ status: 'error', output: null, detail: 'JSON parse failed' });
+    } catch (parseErr) {
+      return res.status(200).json({ status: 'error', output: null, detail: `Parse error: ${parseErr.message}` });
     }
   } catch (err) {
     console.error('extract-receipt error:', err.message);
