@@ -62,6 +62,7 @@ export default function ReceiptReviewDialog({
   const [extractedData, setExtractedData] = useState({});
   const [rotation, setRotation] = useState(0);
   const [extractionFailed, setExtractionFailed] = useState(false);
+  const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const queryClient = useQueryClient();
@@ -78,6 +79,25 @@ export default function ReceiptReviewDialog({
     }
   }, [open, initialReceiptUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Load PDF as blob URL so it can be embedded cross-origin
+  useEffect(() => {
+    const url = fileUrl || initialReceiptUrl;
+    if (!url) return;
+    const looksLikePdf = /\.pdf(\?|$)/i.test(url) || url.toLowerCase().includes('pdf');
+    if (!looksLikePdf) return;
+
+    let objectUrl;
+    fetch(url)
+      .then(r => r.blob())
+      .then(blob => {
+        objectUrl = URL.createObjectURL(blob);
+        setPdfBlobUrl(objectUrl);
+      })
+      .catch(() => setPdfBlobUrl(null));
+
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [fileUrl, initialReceiptUrl]);
+
   // Reset when closed
   useEffect(() => {
     if (!open) {
@@ -88,6 +108,7 @@ export default function ReceiptReviewDialog({
       setExtractedData({});
       setRotation(0);
       setExtractionFailed(false);
+      setPdfBlobUrl(null);
     }
   }, [open]);
 
@@ -359,17 +380,19 @@ export default function ReceiptReviewDialog({
                     </div>
                   </div>
                   {isPdf ? (
-                    <div className="bg-muted rounded-xl flex flex-col items-center justify-center gap-4 min-h-[200px] p-8 border-2 border-dashed border-border">
-                      <FileText className="w-14 h-14 text-primary/40" />
-                      <div className="text-center">
-                        <p className="font-medium text-sm">קובץ PDF</p>
-                        <p className="text-xs text-muted-foreground mt-1">ה-PDF נקרא אוטומטית — ניתן לפתוח לצפייה בנפרד</p>
-                      </div>
-                      <a href={fileUrl || initialReceiptUrl} target="_blank" rel="noopener noreferrer">
-                        <Button variant="outline" className="gap-2 rounded-xl">
-                          <ExternalLink className="w-4 h-4" /> פתח PDF בחלון חדש
-                        </Button>
-                      </a>
+                    <div className="bg-muted rounded-xl overflow-hidden" style={{ height: 520 }}>
+                      {pdfBlobUrl ? (
+                        <iframe
+                          src={pdfBlobUrl}
+                          className="w-full h-full rounded-xl border-0"
+                          title="PDF קבלה"
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center gap-4 h-full text-muted-foreground">
+                          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                          <p className="text-sm">טוען PDF...</p>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="bg-muted rounded-xl overflow-hidden flex items-center justify-center min-h-[300px] max-h-[520px]">

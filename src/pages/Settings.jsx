@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, RefreshCw, Building2, Tag, Pencil, Mail, HardDrive, LogOut, User, KeyRound, Loader2, MapPin, CheckCircle2, Clock, UserCheck, Shield } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Building2, Tag, Pencil, Mail, HardDrive, LogOut, User, KeyRound, Loader2, MapPin, CheckCircle2, Clock, UserCheck, Shield, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { PAYMENT_METHODS } from '@/lib/constants';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
@@ -430,6 +430,7 @@ function IntegrationsTab() {
   const [loading, setLoading] = useState(true);
   const [disconnecting, setDisconnecting] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [openaiStatus, setOpenaiStatus] = useState(null); // null | { connected, reason }
 
   const getAuthHeaders = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -437,6 +438,7 @@ function IntegrationsTab() {
   };
 
   useEffect(() => {
+    // Google status
     getAuthHeaders().then(headers =>
       fetch('/api/google/status', { headers })
         .then(r => r.json())
@@ -444,6 +446,12 @@ function IntegrationsTab() {
         .catch(() => setGoogleStatus({ connected: false }))
         .finally(() => setLoading(false))
     );
+
+    // OpenAI status
+    fetch('/api/check-openai')
+      .then(r => r.json())
+      .then(data => setOpenaiStatus(data))
+      .catch(() => setOpenaiStatus({ connected: false, reason: 'בעיית רשת' }));
 
     const params = new URLSearchParams(window.location.search);
     if (params.get('drive') === 'connected') {
@@ -511,6 +519,47 @@ function IntegrationsTab() {
       <p className="text-sm text-muted-foreground">
         חבר את חשבון Google שלך כדי לשמור קבלות ב-Drive ולסרוק קבלות שמגיעות למייל.
       </p>
+
+      {/* OpenAI Status */}
+      <Card className="rounded-2xl">
+        <CardContent className="p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center">
+                <svg className="w-6 h-6 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                </svg>
+              </div>
+              <div>
+                <div className="font-semibold flex items-center gap-2">
+                  OpenAI (סריקת קבלות)
+                  {openaiStatus === null ? (
+                    <Badge variant="outline" className="text-xs text-muted-foreground">בודק...</Badge>
+                  ) : openaiStatus.connected ? (
+                    <Badge className="text-xs bg-emerald-100 text-emerald-700 border-emerald-200">מחובר</Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-xs bg-red-50 text-red-600 border-red-200">לא מחובר</Badge>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  {openaiStatus?.connected
+                    ? 'חילוץ נתונים מקבלות ותמונות פעיל'
+                    : openaiStatus?.reason
+                    ? `שגיאה: ${openaiStatus.reason}`
+                    : 'נדרש OPENAI_API_KEY בהגדרות Vercel'}
+                </p>
+              </div>
+            </div>
+            {!openaiStatus?.connected && openaiStatus !== null && (
+              <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" size="sm" className="rounded-xl gap-1.5 flex-shrink-0">
+                  <ExternalLink className="w-3.5 h-3.5" /> קבל מפתח API
+                </Button>
+              </a>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Drive Mode (admin) */}
       {googleStatus?.connected && (
