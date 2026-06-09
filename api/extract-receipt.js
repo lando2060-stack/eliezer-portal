@@ -29,7 +29,28 @@ Rules:
 - Omit fields that are not present in the document
 Return ONLY valid JSON — no markdown, no explanation.`;
 
+  // Auto-detect the first available generative model for this key
+  async function pickModel() {
+    try {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+      const d = await r.json();
+      const models = (d.models || []).map(m => m.name.replace('models/', ''));
+      // Prefer flash variants, fall back to anything that supports generateContent
+      return (
+        models.find(m => m.includes('1.5-flash')) ||
+        models.find(m => m.includes('flash')) ||
+        models.find(m => m.includes('pro-vision')) ||
+        models.find(m => m.includes('gemini')) ||
+        'gemini-1.5-flash-latest'
+      );
+    } catch {
+      return 'gemini-1.5-flash-latest';
+    }
+  }
+
   try {
+    const model = await pickModel();
+
     // Download the file
     const fileRes = await fetch(file_url);
     if (!fileRes.ok) throw new Error(`Failed to fetch file: ${fileRes.status}`);
@@ -48,7 +69,7 @@ Return ONLY valid JSON — no markdown, no explanation.`;
     }
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -93,7 +114,7 @@ Return ONLY valid JSON — no markdown, no explanation.`;
       if (typeof output !== 'object' || output === null || Array.isArray(output)) {
         throw new Error('not an object');
       }
-      return res.status(200).json({ status: 'success', output });
+      return res.status(200).json({ status: 'success', output, model_used: model });
     } catch {
       console.error('JSON parse failed. Raw:', content.slice(0, 300));
       return res.status(200).json({ status: 'error', output: null, detail: 'JSON parse failed' });
