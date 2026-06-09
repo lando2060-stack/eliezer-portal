@@ -29,27 +29,33 @@ Rules:
 - Omit fields that are not present in the document
 Return ONLY valid JSON — no markdown, no explanation.`;
 
-  // Auto-detect the first available generative model for this key
-  async function pickModel() {
+  try {
+    // Debug: find out what models this key actually supports
+    let model = null;
+    let modelDebug = {};
     try {
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
       const d = await r.json();
-      const models = (d.models || []).map(m => m.name.replace('models/', ''));
-      // Prefer flash variants, fall back to anything that supports generateContent
-      return (
-        models.find(m => m.includes('1.5-flash')) ||
-        models.find(m => m.includes('flash')) ||
-        models.find(m => m.includes('pro-vision')) ||
-        models.find(m => m.includes('gemini')) ||
-        'gemini-1.5-flash-latest'
-      );
-    } catch {
-      return 'gemini-1.5-flash-latest';
+      modelDebug = { status: r.status, error: d.error, count: d.models?.length };
+      if (r.ok && d.models?.length) {
+        const names = d.models.map(m => m.name.replace('models/', ''));
+        model = names.find(m => m.includes('flash') && m.includes('1.5'))
+          || names.find(m => m.includes('flash'))
+          || names.find(m => m.includes('gemini'))
+          || null;
+        modelDebug.available = names.slice(0, 8);
+        modelDebug.chosen = model;
+      }
+    } catch (e) {
+      modelDebug = { error: e.message };
     }
-  }
 
-  try {
-    const model = await pickModel();
+    if (!model) {
+      return res.status(200).json({
+        status: 'error', output: null,
+        detail: `לא נמצא מודל זמין. debug: ${JSON.stringify(modelDebug)}`,
+      });
+    }
 
     // Download the file
     const fileRes = await fetch(file_url);
