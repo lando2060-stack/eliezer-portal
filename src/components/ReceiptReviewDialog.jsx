@@ -81,26 +81,36 @@ export default function ReceiptReviewDialog({
     }
   }, [open, initialReceiptUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch remote file to detect content-type and create a cross-origin-safe blob URL.
-  // This handles files stored without extensions (e.g. legacy UUID names in Supabase).
+  // Fetch remote file → detect type via magic bytes → create blob URL for inline display.
+  // Handles legacy UUID-named files that have no extension and may have wrong Content-Type.
   useEffect(() => {
     const url = fileUrl || initialReceiptUrl;
-    if (!url || file) return; // local files use previewUrl directly
+    if (!url || file) return; // local files already have previewUrl
 
-    let objectUrl;
+    let cancelled = false;
+    let createdUrl = null;
+
     fetch(url)
-      .then(r => {
-        const ct = (r.headers.get('content-type') || '').split(';')[0].trim();
-        if (ct) setDetectedMimeType(ct);
-        return r.blob();
+      .then(r => r.arrayBuffer().then(buf => [r.headers.get('content-type') || '', buf]))
+      .then(([ct, buf]) => {
+        if (cancelled) return;
+        // PDF magic bytes: %PDF → 0x25 0x50 0x44 0x46
+        const h = new Uint8Array(buf, 0, 4);
+        const isPdfMagic = h[0] === 0x25 && h[1] === 0x50 && h[2] === 0x44 && h[3] === 0x46;
+        const mime = isPdfMagic
+          ? 'application/pdf'
+          : (ct.split(';')[0].trim() || 'image/jpeg');
+        setDetectedMimeType(mime);
+        const blob = new Blob([buf], { type: mime });
+        createdUrl = URL.createObjectURL(blob);
+        setPdfBlobUrl(createdUrl);
       })
-      .then(blob => {
-        objectUrl = URL.createObjectURL(blob);
-        setPdfBlobUrl(objectUrl);
-      })
-      .catch(() => setPdfBlobUrl(null));
+      .catch(() => { if (!cancelled) setPdfBlobUrl(null); });
 
-    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+    return () => {
+      cancelled = true;
+      if (createdUrl) URL.revokeObjectURL(createdUrl);
+    };
   }, [fileUrl, initialReceiptUrl, file]);
 
   // Reset when closed
@@ -405,26 +415,25 @@ export default function ReceiptReviewDialog({
                       </a>
                     </div>
                   </div>
-                  {isPdf ? (
+                  {/* For remote files wait for blob (avoids broken-image flash while detecting type) */}
+                  {(!file && !pdfBlobUrl) ? (
+                    <div className="bg-muted rounded-xl flex flex-col items-center justify-center gap-3 text-muted-foreground" style={{ height: 300 }}>
+                      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                      <p className="text-sm">טוען חשבונית...</p>
+                    </div>
+                  ) : isPdf ? (
                     <div className="bg-muted rounded-xl overflow-hidden" style={{ height: 520 }}>
-                      {(pdfBlobUrl || previewUrl) ? (
-                        <embed
-                          src={pdfBlobUrl || previewUrl}
-                          type="application/pdf"
-                          className="w-full rounded-xl"
-                          style={{ height: 520 }}
-                        />
-                      ) : (
-                        <div className="flex flex-col items-center justify-center gap-3 h-full text-muted-foreground">
-                          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                          <p className="text-sm">טוען PDF...</p>
-                        </div>
-                      )}
+                      <iframe
+                        src={pdfBlobUrl || previewUrl}
+                        title="קבלה"
+                        className="w-full border-0 rounded-xl"
+                        style={{ height: 520 }}
+                      />
                     </div>
                   ) : (
                     <div className="bg-muted rounded-xl overflow-hidden flex items-center justify-center min-h-[300px] max-h-[520px]">
                       <img
-                        src={previewUrl || pdfBlobUrl || fileUrl || initialReceiptUrl}
+                        src={pdfBlobUrl || previewUrl || fileUrl || initialReceiptUrl}
                         alt="קבלה"
                         className="max-w-full max-h-[520px] object-contain transition-transform"
                         style={{ transform: `rotate(${rotation}deg)` }}
