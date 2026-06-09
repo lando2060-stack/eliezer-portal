@@ -173,9 +173,11 @@ export default function Expenses() {
           <h1 className="text-2xl font-bold">קבלות והוצאות</h1>
           <p className="text-muted-foreground text-sm mt-1">{filtered.length} הוצאות • סה״כ {formatCurrency(totalFiltered)}</p>
         </div>
-        <Button className="gap-2 rounded-xl" onClick={() => setShowAddModal(true)}>
-          הוצאה חדשה <Plus className="w-4 h-4" />
-        </Button>
+        {!isAdminView && (
+          <Button className="gap-2 rounded-xl" onClick={() => setShowReceiptDialog(true)}>
+            הוצאה חדשה <Plus className="w-4 h-4" />
+          </Button>
+        )}
       </div>
 
       <Tabs defaultValue="expenses">
@@ -214,15 +216,14 @@ export default function Expenses() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50">
-                    <TableHead className="text-right">תאריך</TableHead>
+                    <TableHead className="w-12"></TableHead>
                     <TableHead className="text-right">ספק</TableHead>
-                    <TableHead className="text-right">קטגוריה</TableHead>
+                    <TableHead className="text-right">תאריך</TableHead>
                     <TableHead className="text-right">סכום</TableHead>
-                    <TableHead className="text-right">שיוך</TableHead>
+                    <TableHead className="text-right">קטגוריה</TableHead>
                     {isAdminView && <TableHead className="text-right">סוכן</TableHead>}
                     <TableHead className="text-right">סטטוס</TableHead>
                     <TableHead className="text-right">קבלה</TableHead>
-                    <TableHead className="w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -235,18 +236,6 @@ export default function Expenses() {
                     const scopeLabel = expense.scope === 'agent' ? 'סוכן' : expense.scope === 'deal' ? 'עסקה' : 'משרד';
                     return (
                       <TableRow key={expense.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => setViewExpense(expense)}>
-                        <TableCell className="text-sm">{expense.date ? format(new Date(expense.date), 'dd/MM/yyyy') : '-'}</TableCell>
-                        <TableCell className="font-medium text-sm">{expense.vendor_name || '-'}</TableCell>
-                        <TableCell className="text-sm">{expense.category || '-'}</TableCell>
-                        <TableCell className="font-semibold text-sm">{formatCurrency(expense.total_amount, expense.currency)}</TableCell>
-                        <TableCell><Badge variant="outline" className="text-xs">{scopeLabel}</Badge></TableCell>
-                        {isAdminView && <TableCell className="text-sm text-muted-foreground">{expense.agent_name || '-'}</TableCell>}
-                        <TableCell><Badge variant="secondary" className={`text-xs ${status.color}`}>{status.label}</Badge></TableCell>
-                        <TableCell>
-                          {expense.has_receipt
-                            ? <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 text-xs">יש</Badge>
-                            : <Badge variant="secondary" className="bg-red-100 text-red-700 text-xs">חסרה</Badge>}
-                        </TableCell>
                         <TableCell onClick={e => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -271,6 +260,17 @@ export default function Expenses() {
                               )}
                             </DropdownMenuContent>
                           </DropdownMenu>
+                        </TableCell>
+                        <TableCell className="font-medium text-sm">{expense.vendor_name || '-'}</TableCell>
+                        <TableCell className="text-sm">{expense.date ? format(new Date(expense.date), 'dd/MM/yyyy') : '-'}</TableCell>
+                        <TableCell className="font-semibold text-sm">{formatCurrency(expense.total_amount, expense.currency)}</TableCell>
+                        <TableCell className="text-sm">{expense.category || '-'}</TableCell>
+                        {isAdminView && <TableCell className="text-sm text-muted-foreground">{expense.agent_name || '-'}</TableCell>}
+                        <TableCell><Badge variant="secondary" className={`text-xs ${status.color}`}>{status.label}</Badge></TableCell>
+                        <TableCell>
+                          {expense.has_receipt
+                            ? <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 text-xs">יש</Badge>
+                            : <Badge variant="secondary" className="bg-red-100 text-red-700 text-xs">חסרה</Badge>}
                         </TableCell>
                       </TableRow>
                     );

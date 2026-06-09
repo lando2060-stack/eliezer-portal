@@ -207,7 +207,7 @@ export default function ReceiptReviewDialog({
         notes:            data.notes || '',
         receipt_url:      data.receipt_url || '',
         has_receipt:      !!data.receipt_url,
-        status:           'pending_approval',
+        status:           isAdminView ? 'approved' : 'pending_approval',
         scope:            'office',
         agent_id:         data.agent_id || '',
         agent_name:       data.agent_name || '',

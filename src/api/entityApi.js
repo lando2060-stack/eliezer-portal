@@ -39,14 +39,15 @@ export function createEntityApi(tableName) {
     },
 
     async update(id, payload) {
-      const { data, error } = await supabase
+      const { id: _id, created_at, created_date, ...data } = payload;
+      const { data: result, error } = await supabase
         .from(tableName)
-        .update(payload)
+        .update(data)
         .eq('id', id)
         .select()
         .single();
       if (error) throw error;
-      return normalizeRow(data);
+      return normalizeRow(result);
     },
 
     async delete(id) {
