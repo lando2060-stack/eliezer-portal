@@ -1,10 +1,7 @@
 /**
  * POST /api/extract-receipt
  * Body: { file_url: string, json_schema?: object }
- *
- * Uses Gemini 2.0 Flash — supports images AND PDFs natively.
- * Downloads the file, sends as inline_data (base64) → always works
- * regardless of bucket visibility.
+ * Uses Claude claude-haiku-4-5 — supports images and PDFs natively via base64.
  */
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -12,58 +9,25 @@ export default async function handler(req, res) {
   const { file_url, json_schema } = req.body;
   if (!file_url) return res.status(400).json({ error: 'file_url is required' });
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
 
   const schemaStr = json_schema ? JSON.stringify(json_schema) : null;
-  const extractInstruction = schemaStr
-    ? `Return a JSON object matching this schema: ${schemaStr}`
-    : 'Return a JSON object with all relevant receipt/invoice fields.';
-
   const prompt = `You are a receipt/invoice data extractor for an Israeli real-estate agency.
-${extractInstruction}
+${schemaStr ? `Return a JSON object matching this schema: ${schemaStr}` : 'Return a JSON object with all relevant receipt/invoice fields.'}
 Rules:
 - Dates → YYYY-MM-DD
 - Amounts → plain numbers, no ₪ symbols
 - Currency → ILS unless clearly otherwise
-- Omit fields that are not present in the document
+- Omit fields not present in the document
 Return ONLY valid JSON — no markdown, no explanation.`;
 
   try {
-    // Debug: find out what models this key actually supports
-    let model = null;
-    let modelDebug = {};
-    try {
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-      const d = await r.json();
-      modelDebug = { status: r.status, error: d.error, count: d.models?.length };
-      if (r.ok && d.models?.length) {
-        const names = d.models.map(m => m.name.replace('models/', ''));
-        model = names.find(m => m.includes('flash') && m.includes('1.5'))
-          || names.find(m => m.includes('flash'))
-          || names.find(m => m.includes('gemini'))
-          || null;
-        modelDebug.available = names.slice(0, 8);
-        modelDebug.chosen = model;
-      }
-    } catch (e) {
-      modelDebug = { error: e.message };
-    }
-
-    if (!model) {
-      return res.status(200).json({
-        status: 'error', output: null,
-        detail: `לא נמצא מודל זמין. debug: ${JSON.stringify(modelDebug)}`,
-      });
-    }
-
-    // Download the file
     const fileRes = await fetch(file_url);
     if (!fileRes.ok) throw new Error(`Failed to fetch file: ${fileRes.status}`);
     const buf = await fileRes.arrayBuffer();
     const base64 = Buffer.from(buf).toString('base64');
 
-    // Determine MIME type
     const ct = fileRes.headers.get('content-type') || '';
     let mimeType = ct.split(';')[0].trim();
     if (!mimeType || mimeType === 'application/octet-stream') {
@@ -74,55 +38,45 @@ Return ONLY valid JSON — no markdown, no explanation.`;
       else mimeType = 'image/jpeg';
     }
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: prompt },
-              { inline_data: { mime_type: mimeType, data: base64 } },
-            ],
-          }],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            temperature: 0,
-          },
-        }),
-      }
-    );
+    const isPdf = mimeType === 'application/pdf';
+
+    const contentBlock = isPdf
+      ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
+      : { type: 'image', source: { type: 'base64', media_type: mimeType, data: base64 } };
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        messages: [{
+          role: 'user',
+          content: [contentBlock, { type: 'text', text: prompt }],
+        }],
+      }),
+    });
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error('Gemini error:', errText);
-      const isQuota = response.status === 429;
-      return res.status(200).json({
-        status: 'error',
-        output: null,
-        detail: isQuota
-          ? 'חרגת ממגבלת הקוטה של Gemini — המתן דקה ונסה שוב, או הפעל חיוב ב-Google Cloud Console'
-          : errText.slice(0, 300),
-      });
+      console.error('Claude error:', errText);
+      return res.status(200).json({ status: 'error', output: null, detail: errText.slice(0, 300) });
     }
 
     const data = await response.json();
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-
-    if (!content) {
-      return res.status(200).json({ status: 'error', output: null, detail: 'Empty response from Gemini' });
-    }
+    const content = data.content?.[0]?.text?.trim() || '';
 
     try {
-      // Gemini with responseMimeType:application/json returns clean JSON
-      const output = JSON.parse(content);
-      if (typeof output !== 'object' || output === null || Array.isArray(output)) {
-        throw new Error('not an object');
-      }
-      return res.status(200).json({ status: 'success', output, model_used: model });
+      const jsonStr = content.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/, '').trim();
+      const output = JSON.parse(jsonStr);
+      if (typeof output !== 'object' || output === null || Array.isArray(output)) throw new Error('not object');
+      return res.status(200).json({ status: 'success', output });
     } catch {
-      console.error('JSON parse failed. Raw:', content.slice(0, 300));
+      console.error('JSON parse failed:', content.slice(0, 300));
       return res.status(200).json({ status: 'error', output: null, detail: 'JSON parse failed' });
     }
   } catch (err) {

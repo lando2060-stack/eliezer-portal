@@ -532,7 +532,7 @@ function IntegrationsTab() {
               </div>
               <div>
                 <div className="font-semibold flex items-center gap-2">
-                  Gemini AI (סריקת קבלות)
+                  Claude AI (סריקת קבלות)
                   {openaiStatus === null ? (
                     <Badge variant="outline" className="text-xs text-muted-foreground">בודק...</Badge>
                   ) : openaiStatus.connected ? (
@@ -546,14 +546,14 @@ function IntegrationsTab() {
                     ? 'חילוץ נתונים מקבלות ותמונות פעיל'
                     : openaiStatus?.reason
                     ? openaiStatus.reason
-                    : 'נדרש GEMINI_API_KEY בהגדרות Vercel'}
+                    : 'נדרש ANTHROPIC_API_KEY בהגדרות Vercel'}
                 </p>
               </div>
             </div>
             {!openaiStatus?.connected && openaiStatus !== null && (
-              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">
+              <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer">
                 <Button variant="outline" size="sm" className="rounded-xl gap-1.5 flex-shrink-0">
-                  <ExternalLink className="w-3.5 h-3.5" /> קבל מפתח Gemini (חינם)
+                  <ExternalLink className="w-3.5 h-3.5" /> קבל מפתח Claude
                 </Button>
               </a>
             )}
