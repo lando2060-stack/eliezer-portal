@@ -48,8 +48,20 @@ async function getValidAccessToken(integration, supabase) {
   return integration.access_token;
 }
 
-async function listMessages(accessToken, maxResults = 25) {
-  const q = 'has:attachment (קבלה OR חשבונית OR receipt OR invoice) newer_than:30d';
+async function listMessages(accessToken, maxResults = 40) {
+  // Target only financial documents: match subject OR sender patterns common for invoices/receipts
+  const q = [
+    'has:attachment',
+    'newer_than:30d',
+    '(',
+      'subject:(חשבונית OR קבלה OR "חשבונית מס" OR invoice OR receipt OR billing OR "tax invoice" OR חיוב OR "פירוט חיוב" OR "אישור תשלום" OR "הוראת קבע")',
+      'OR from:(invoice OR billing OR receipt OR accounts OR חשבונות OR חשבוניות)',
+    ')',
+    // Exclude social, promotional, and notification noise
+    '-category:promotions',
+    '-category:social',
+    '-subject:(newsletter OR unsubscribe OR "click here" OR "verify your" OR "reset password" OR OTP OR code OR verification OR ניוזלטר)',
+  ].join(' ');
   const params = new URLSearchParams({ q, maxResults });
   const res = await fetch(
     `https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`,
@@ -144,6 +156,13 @@ export default async function handler(req, res) {
       try {
         const message = await getMessage(accessToken, msg.id);
         const parts = extractAttachmentParts(message.payload);
+
+        // Secondary filter: skip if no attachments look like financial documents
+        const financialKeywords = ['חשבונית', 'קבלה', 'invoice', 'receipt', 'bill', 'tax', 'payment', 'פירוט', 'חיוב'];
+        const subjectValue = message.payload?.headers?.find(h => h.name === 'Subject')?.value?.toLowerCase() || '';
+        const fromValue = message.payload?.headers?.find(h => h.name === 'From')?.value?.toLowerCase() || '';
+        const hasFinancialSignal = financialKeywords.some(k => subjectValue.includes(k) || fromValue.includes(k));
+        if (!hasFinancialSignal && parts.length === 0) continue;
 
         for (const part of parts.slice(0, 2)) {
           try {

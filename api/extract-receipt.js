@@ -1,8 +1,11 @@
 /**
  * Vercel serverless function — extracts structured data from a receipt image
- * using OpenAI GPT-4 Vision.
+ * using OpenAI GPT-4o Vision.
  * POST /api/extract-receipt
- * Body: { file_url: string, json_schema: object }
+ * Body: { file_url: string, json_schema?: object }
+ *
+ * Downloads the file first and sends it as base64 so private Supabase Storage
+ * URLs work correctly (OpenAI servers cannot access signed/private URLs).
  */
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -16,6 +19,27 @@ export default async function handler(req, res) {
   if (!apiKey) return res.status(500).json({ error: 'OPENAI_API_KEY not configured' });
 
   try {
+    // Download the file so we can send it as base64 (avoids private-bucket access issues)
+    let imageContent;
+    try {
+      const fileRes = await fetch(file_url, { signal: AbortSignal.timeout(15000) });
+      if (!fileRes.ok) throw new Error(`fetch ${fileRes.status}`);
+      const buf = await fileRes.arrayBuffer();
+      const b64 = Buffer.from(buf).toString('base64');
+      const ct = fileRes.headers.get('content-type') || 'image/jpeg';
+
+      if (ct === 'application/pdf' || file_url.toLowerCase().includes('.pdf')) {
+        // GPT-4o Vision does not support PDFs as base64; fall back to URL
+        imageContent = { type: 'image_url', image_url: { url: file_url, detail: 'high' } };
+      } else {
+        const safeType = ct.startsWith('image/') ? ct : 'image/jpeg';
+        imageContent = { type: 'image_url', image_url: { url: `data:${safeType};base64,${b64}`, detail: 'high' } };
+      }
+    } catch {
+      // If download fails, fall back to URL (public bucket)
+      imageContent = { type: 'image_url', image_url: { url: file_url, detail: 'high' } };
+    }
+
     const schemaDescription = json_schema
       ? `Return a JSON object matching this schema: ${JSON.stringify(json_schema)}`
       : 'Return a JSON object with all relevant receipt fields.';
@@ -34,12 +58,9 @@ export default async function handler(req, res) {
             content: [
               {
                 type: 'text',
-                text: `You are a receipt data extractor. Extract all relevant information from this receipt image. ${schemaDescription} Return ONLY valid JSON, no markdown, no explanation.`,
+                text: `You are a receipt/invoice data extractor for an Israeli real-estate agency. Extract all relevant information from this receipt or invoice image. ${schemaDescription} Rules: dates must be YYYY-MM-DD, amounts must be numbers (not strings), currency should be ILS unless clearly otherwise. Return ONLY valid JSON, no markdown, no explanation.`,
               },
-              {
-                type: 'image_url',
-                image_url: { url: file_url, detail: 'high' },
-              },
+              imageContent,
             ],
           },
         ],
@@ -57,10 +78,11 @@ export default async function handler(req, res) {
     const content = data.choices?.[0]?.message?.content?.trim() || '';
 
     try {
-      const jsonStr = content.replace(/^```json\s*/i, '').replace(/\s*```$/, '');
+      const jsonStr = content.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
       const output = JSON.parse(jsonStr);
       return res.status(200).json({ status: 'success', output });
     } catch {
+      console.error('JSON parse error, raw content:', content);
       return res.status(200).json({ status: 'error', output: null });
     }
   } catch (err) {

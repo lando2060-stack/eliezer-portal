@@ -5,102 +5,24 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, MoreVertical, Pencil, Trash2, Upload, Plus, CheckCircle, Download, PenLine, Mail, Loader2, Eye, Sparkles } from 'lucide-react';
+import { Search, MoreVertical, Pencil, Trash2, Upload, Plus, CheckCircle, Download, PenLine, Mail, Sparkles } from 'lucide-react';
+import ReceiptReviewDialog from '@/components/ReceiptReviewDialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { format } from 'date-fns';
 import { formatCurrency, STATUS_MAP, PAYMENT_METHODS } from '@/lib/constants';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useIsAdminView } from '@/hooks/useIsAdminView';
-import { supabase } from '@/lib/supabase';
 import ExpenseEditDialog from '@/components/expenses/ExpenseEditDialog';
 
 // ── Gmail Inbox Tab ───────────────────────────────────────────
-function GmailInboxTab({ inboxExpenses, isLoading, onDelete, onExtracted }) {
-  const [extractingId, setExtractingId] = useState(null);
-  const [previewExpense, setPreviewExpense] = useState(null);
-  const [extracted, setExtracted] = useState(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const queryClient = useQueryClient();
-
-  const getAuthHeaders = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session ? { Authorization: `Bearer ${session.access_token}` } : {};
-  };
-
-  const handleExtract = async (expense) => {
-    if (!expense.receipt_url) { toast.error('אין קובץ מצורף'); return; }
-    setExtractingId(expense.id);
-    try {
-      const headers = await getAuthHeaders();
-      const res = await fetch('/api/extract-receipt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...headers },
-        body: JSON.stringify({
-          file_url: expense.receipt_url,
-          json_schema: {
-            type: 'object',
-            properties: {
-              vendor_name: { type: 'string' },
-              vendor_tax_id: { type: 'string' },
-              date: { type: 'string', description: 'YYYY-MM-DD' },
-              receipt_number: { type: 'string' },
-              invoice_number: { type: 'string' },
-              total_amount: { type: 'number' },
-              amount_before_vat: { type: 'number' },
-              vat_amount: { type: 'number' },
-              payment_method: { type: 'string' },
-              currency: { type: 'string' },
-            },
-          },
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.status !== 'success') throw new Error(data.error || 'שגיאה בחילוץ');
-      setExtracted({ ...data.output, id: expense.id, receipt_url: expense.receipt_url });
-      setPreviewExpense(expense);
-      setConfirmOpen(true);
-    } catch (err) {
-      toast.error(err.message || 'שגיאה בחילוץ פרטים');
-    } finally {
-      setExtractingId(null);
-    }
-  };
-
-  const confirmMutation = useMutation({
-    mutationFn: async (data) => {
-      return base44.entities.Expense.update(data.id, {
-        vendor_name: data.vendor_name || '',
-        vendor_tax_id: data.vendor_tax_id || '',
-        date: data.date || '',
-        receipt_number: data.receipt_number || '',
-        invoice_number: data.invoice_number || '',
-        total_amount: parseFloat(data.total_amount) || 0,
-        amount_before_vat: parseFloat(data.amount_before_vat) || 0,
-        vat_amount: parseFloat(data.vat_amount) || 0,
-        payment_method: data.payment_method || '',
-        currency: data.currency || 'ILS',
-        status: 'pending_approval',
-        has_receipt: true,
-        notes: '',
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['expenses'] });
-      toast.success('הפרטים נשמרו — ההוצאה הועברה לאישור');
-      setConfirmOpen(false);
-      setExtracted(null);
-      setPreviewExpense(null);
-      onExtracted?.();
-    },
-    onError: () => toast.error('שגיאה בשמירת הפרטים'),
-  });
+function GmailInboxTab({ inboxExpenses, isLoading, onDelete, isAdminView }) {
+  const [reviewExpense, setReviewExpense] = useState(null);
 
   if (isLoading) return <div className="text-center py-12 text-muted-foreground">טוען...</div>;
 
@@ -148,20 +70,13 @@ function GmailInboxTab({ inboxExpenses, isLoading, onDelete, onExtracted }) {
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-1.5">
-                    {expense.receipt_url && (
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => window.open(expense.receipt_url, '_blank')}>
-                        <Eye className="w-4 h-4 text-muted-foreground" />
-                      </Button>
-                    )}
                     <Button
                       size="sm"
                       className="gap-1.5 rounded-xl text-xs bg-violet-600 hover:bg-violet-700"
-                      onClick={() => handleExtract(expense)}
-                      disabled={extractingId === expense.id}
+                      onClick={() => setReviewExpense(expense)}
+                      disabled={!expense.receipt_url}
                     >
-                      {extractingId === expense.id
-                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        : <Sparkles className="w-3.5 h-3.5" />}
+                      <Sparkles className="w-3.5 h-3.5" />
                       חלץ פרטים
                     </Button>
                     <Button
@@ -178,53 +93,17 @@ function GmailInboxTab({ inboxExpenses, isLoading, onDelete, onExtracted }) {
         </Table>
       </Card>
 
-      {/* Confirm extraction dialog */}
-      <Dialog open={confirmOpen} onOpenChange={v => { if (!v) { setConfirmOpen(false); setExtracted(null); } }}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><Sparkles className="w-5 h-5 text-violet-600" /> פרטים שחולצו</DialogTitle></DialogHeader>
-          {extracted && (
-            <div className="space-y-4">
-              {previewExpense?.receipt_url && (
-                <div className="bg-muted rounded-xl overflow-hidden">
-                  <img src={previewExpense.receipt_url} alt="חשבונית" className="w-full max-h-48 object-contain" />
-                </div>
-              )}
-              <p className="text-xs text-muted-foreground">ניתן לערוך לפני השמירה</p>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  ['vendor_name', 'שם ספק'],
-                  ['vendor_tax_id', 'ח.פ.'],
-                  ['date', 'תאריך'],
-                  ['receipt_number', 'מספר קבלה'],
-                  ['invoice_number', 'מספר חשבונית'],
-                  ['total_amount', 'סכום כולל'],
-                  ['amount_before_vat', 'לפני מע״מ'],
-                  ['vat_amount', 'מע״מ'],
-                  ['payment_method', 'אמצעי תשלום'],
-                  ['currency', 'מטבע'],
-                ].map(([key, label]) => (
-                  <div key={key} className="space-y-1">
-                    <Label className="text-xs">{label}</Label>
-                    <Input
-                      value={extracted[key] ?? ''}
-                      onChange={e => setExtracted(prev => ({ ...prev, [key]: e.target.value }))}
-                      className="rounded-xl text-sm h-8"
-                    />
-                  </div>
-                ))}
-              </div>
-              <Button
-                className="w-full rounded-xl gap-2 bg-violet-600 hover:bg-violet-700"
-                onClick={() => confirmMutation.mutate(extracted)}
-                disabled={confirmMutation.isPending}
-              >
-                {confirmMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                שמור והעבר לאישור
-              </Button>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Full extract+review dialog — same as manual upload */}
+      {reviewExpense && (
+        <ReceiptReviewDialog
+          open={!!reviewExpense}
+          onClose={() => setReviewExpense(null)}
+          receiptUrl={reviewExpense.receipt_url}
+          expenseId={reviewExpense.id}
+          isAdminView={isAdminView}
+          onSaved={() => setReviewExpense(null)}
+        />
+      )}
     </div>
   );
 }
@@ -238,6 +117,7 @@ export default function Expenses() {
   const [viewExpense, setViewExpense] = useState(null);
   const [editExpense, setEditExpense] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showReceiptDialog, setShowReceiptDialog] = useState(false);
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -407,7 +287,7 @@ export default function Expenses() {
             inboxExpenses={gmailInbox}
             isLoading={isLoading}
             onDelete={(id) => deleteMutation.mutate(id)}
-            onExtracted={() => {}}
+            isAdminView={isAdminView}
           />
         </TabsContent>
       </Tabs>
@@ -473,20 +353,29 @@ export default function Expenses() {
                 <p className="text-xs text-muted-foreground">הזן פרטים ידנית</p>
               </div>
             </button>
-            <Link to="/upload" onClick={() => setShowAddModal(false)}>
-              <button className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-border hover:border-primary/50 hover:bg-primary/5 transition-all text-right">
-                <div className="p-3 bg-amber-100 rounded-xl">
-                  <Upload className="w-5 h-5 text-amber-600" />
-                </div>
-                <div>
-                  <p className="font-semibold">העלאת מסמך</p>
-                  <p className="text-xs text-muted-foreground">תמונה או PDF עם סריקה אוטומטית</p>
-                </div>
-              </button>
-            </Link>
+            <button
+              className="flex items-center gap-4 p-4 rounded-2xl border-2 border-border hover:border-primary/50 hover:bg-primary/5 transition-all text-right"
+              onClick={() => { setShowAddModal(false); setShowReceiptDialog(true); }}
+            >
+              <div className="p-3 bg-amber-100 rounded-xl">
+                <Upload className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <p className="font-semibold">העלאת מסמך + סריקה</p>
+                <p className="text-xs text-muted-foreground">תמונה או PDF עם חילוץ נתונים אוטומטי</p>
+              </div>
+            </button>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Receipt upload + review dialog */}
+      <ReceiptReviewDialog
+        open={showReceiptDialog}
+        onClose={() => setShowReceiptDialog(false)}
+        isAdminView={isAdminView}
+        onSaved={() => setShowReceiptDialog(false)}
+      />
     </div>
   );
 }
