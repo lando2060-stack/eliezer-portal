@@ -63,8 +63,7 @@ export default function ReceiptReviewDialog({
   const [rotation, setRotation] = useState(0);
   const [extractionFailed, setExtractionFailed] = useState(false);
   const [extractionError, setExtractionError] = useState('');
-  const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
-  const [detectedMimeType, setDetectedMimeType] = useState('');
+  const [imgFailed, setImgFailed] = useState(false);
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const queryClient = useQueryClient();
@@ -81,38 +80,6 @@ export default function ReceiptReviewDialog({
     }
   }, [open, initialReceiptUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch remote file → detect type via magic bytes → create blob URL for inline display.
-  // Handles legacy UUID-named files that have no extension and may have wrong Content-Type.
-  useEffect(() => {
-    const url = fileUrl || initialReceiptUrl;
-    if (!url || file) return; // local files already have previewUrl
-
-    let cancelled = false;
-    let createdUrl = null;
-
-    fetch(url)
-      .then(r => r.arrayBuffer().then(buf => [r.headers.get('content-type') || '', buf]))
-      .then(([ct, buf]) => {
-        if (cancelled) return;
-        // PDF magic bytes: %PDF → 0x25 0x50 0x44 0x46
-        const h = new Uint8Array(buf, 0, 4);
-        const isPdfMagic = h[0] === 0x25 && h[1] === 0x50 && h[2] === 0x44 && h[3] === 0x46;
-        const mime = isPdfMagic
-          ? 'application/pdf'
-          : (ct.split(';')[0].trim() || 'image/jpeg');
-        setDetectedMimeType(mime);
-        const blob = new Blob([buf], { type: mime });
-        createdUrl = URL.createObjectURL(blob);
-        setPdfBlobUrl(createdUrl);
-      })
-      .catch(() => { if (!cancelled) setPdfBlobUrl(null); });
-
-    return () => {
-      cancelled = true;
-      if (createdUrl) URL.revokeObjectURL(createdUrl);
-    };
-  }, [fileUrl, initialReceiptUrl, file]);
-
   // Reset when closed
   useEffect(() => {
     if (!open) {
@@ -124,8 +91,7 @@ export default function ReceiptReviewDialog({
       setRotation(0);
       setExtractionFailed(false);
       setExtractionError('');
-      setPdfBlobUrl(null);
-      setDetectedMimeType('');
+      setImgFailed(false);
     }
   }, [open]);
 
@@ -292,11 +258,15 @@ export default function ReceiptReviewDialog({
     },
   });
 
+  const displayUrl = previewUrl || fileUrl || initialReceiptUrl || '';
+  // Known PDF: has .pdf in URL or local file type
   const isPdf = file?.type === 'application/pdf' ||
     file?.name?.toLowerCase().endsWith('.pdf') ||
-    fileUrl?.toLowerCase().includes('.pdf') ||
-    initialReceiptUrl?.toLowerCase().includes('.pdf') ||
-    detectedMimeType === 'application/pdf';
+    /\.pdf(\?|$)/i.test(displayUrl);
+  // Unknown extension (gmail_, UUID, etc.) — use iframe which handles both PDFs and images
+  const isUnknownType = !file && displayUrl && !/\.(jpg|jpeg|png|webp|gif|heic|pdf)(\?|$)/i.test(displayUrl);
+  // Show as iframe when: known PDF, unknown type, or img failed
+  const useIframe = isPdf || isUnknownType || imgFailed;
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
@@ -403,7 +373,7 @@ export default function ReceiptReviewDialog({
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium text-muted-foreground">תצוגת קבלה</p>
                     <div className="flex gap-1">
-                      {!isPdf && (
+                      {!useIframe && (
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setRotation(r => r + 90)}>
                           <RotateCw className="w-4 h-4" />
                         </Button>
@@ -415,16 +385,10 @@ export default function ReceiptReviewDialog({
                       </a>
                     </div>
                   </div>
-                  {/* For remote files wait for blob (avoids broken-image flash while detecting type) */}
-                  {(!file && !pdfBlobUrl) ? (
-                    <div className="bg-muted rounded-xl flex flex-col items-center justify-center gap-3 text-muted-foreground" style={{ height: 300 }}>
-                      <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                      <p className="text-sm">טוען חשבונית...</p>
-                    </div>
-                  ) : isPdf ? (
+                  {useIframe ? (
                     <div className="bg-muted rounded-xl overflow-hidden" style={{ height: 520 }}>
                       <iframe
-                        src={pdfBlobUrl || previewUrl}
+                        src={displayUrl}
                         title="קבלה"
                         className="w-full border-0 rounded-xl"
                         style={{ height: 520 }}
@@ -433,10 +397,11 @@ export default function ReceiptReviewDialog({
                   ) : (
                     <div className="bg-muted rounded-xl overflow-hidden flex items-center justify-center min-h-[300px] max-h-[520px]">
                       <img
-                        src={pdfBlobUrl || previewUrl || fileUrl || initialReceiptUrl}
+                        src={displayUrl}
                         alt="קבלה"
                         className="max-w-full max-h-[520px] object-contain transition-transform"
                         style={{ transform: `rotate(${rotation}deg)` }}
+                        onError={() => setImgFailed(true)}
                       />
                     </div>
                   )}
