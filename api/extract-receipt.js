@@ -2,10 +2,12 @@
  * POST /api/extract-receipt
  * Body: { file_url: string, json_schema?: object }
  *
- * Images: passes URL directly to GPT-4o Vision (fast, no download needed).
- * PDFs:   uploads to OpenAI Files API → references file_id in the message,
- *         then deletes the temporary file.
+ * Images → passes URL directly to GPT-4o Vision (fast, no download).
+ * PDFs   → downloads, extracts text with pdf-parse, sends as text prompt
+ *           (works reliably for all digitally-generated Israeli invoices).
  */
+import pdfParse from 'pdf-parse/lib/pdf-parse.js';
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -15,65 +17,58 @@ export default async function handler(req, res) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'OPENAI_API_KEY not configured' });
 
-  const schemaDescription = json_schema
-    ? `Return a JSON object matching this schema: ${JSON.stringify(json_schema)}`
+  const schemaStr = json_schema ? JSON.stringify(json_schema) : null;
+  const extractInstruction = schemaStr
+    ? `Return a JSON object matching this schema: ${schemaStr}`
     : 'Return a JSON object with all relevant receipt/invoice fields.';
 
-  const systemPrompt = `You are a receipt/invoice data extractor for an Israeli real-estate agency.
-Extract all information from this document.
-${schemaDescription}
+  const basePrompt = `You are a receipt/invoice data extractor for an Israeli real-estate agency.
+${extractInstruction}
 Rules:
-- Dates must be YYYY-MM-DD format
-- Amounts must be plain numbers (not strings), no currency symbols
-- currency field: use ILS unless clearly otherwise
-- If a field is not present, omit it (don't include null values)
-Return ONLY valid JSON — no markdown, no explanation, no code block.`;
+- Dates → YYYY-MM-DD
+- Amounts → plain numbers (no ₪ symbols)
+- Currency → ILS unless clearly otherwise
+- Omit fields that are not present
+Return ONLY valid JSON — no markdown, no explanation.`;
 
   try {
-    const isPdf = file_url.toLowerCase().includes('.pdf') || file_url.toLowerCase().includes('pdf');
+    const isPdf = /\.pdf(\?|$)/i.test(file_url) || file_url.toLowerCase().includes('pdf');
 
-    let messageContent;
+    let messages;
 
     if (isPdf) {
-      // ── PDF: upload to OpenAI Files API ──────────────────────────────
-      let fileId = null;
+      // ── PDF: extract text, send as text prompt ────────────────────────────
+      let pdfText = '';
       try {
-        const fileRes = await fetch(file_url);
-        if (!fileRes.ok) throw new Error('fetch failed');
-        const buf = await fileRes.arrayBuffer();
-
-        const form = new FormData();
-        form.append('file', new Blob([buf], { type: 'application/pdf' }), 'receipt.pdf');
-        form.append('purpose', 'vision');
-
-        const uploadRes = await fetch('https://api.openai.com/v1/files', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${apiKey}` },
-          body: form,
-        });
-        const uploadData = await uploadRes.json();
-        fileId = uploadData?.id;
+        const resp = await fetch(file_url);
+        if (!resp.ok) throw new Error(`fetch ${resp.status}`);
+        const buf = Buffer.from(await resp.arrayBuffer());
+        const parsed = await pdfParse(buf);
+        pdfText = parsed.text?.trim() || '';
       } catch (e) {
-        console.error('PDF upload error:', e);
+        console.error('PDF text extraction failed:', e.message);
       }
 
-      if (fileId) {
-        messageContent = [
-          { type: 'text', text: systemPrompt },
-          { type: 'file', file: { file_id: fileId } },
-        ];
-      } else {
-        // Fallback: try URL (works only if publicly accessible)
-        messageContent = [
-          { type: 'text', text: systemPrompt },
-          { type: 'image_url', image_url: { url: file_url, detail: 'high' } },
-        ];
+      if (!pdfText) {
+        return res.status(200).json({ status: 'error', output: null, detail: 'Could not extract text from PDF' });
       }
+
+      messages = [
+        {
+          role: 'user',
+          content: `${basePrompt}\n\nPDF text content:\n---\n${pdfText.slice(0, 6000)}\n---`,
+        },
+      ];
     } else {
-      // ── Image: pass URL directly (no download, fast) ─────────────────
-      messageContent = [
-        { type: 'text', text: systemPrompt },
-        { type: 'image_url', image_url: { url: file_url, detail: 'high' } },
+      // ── Image: pass URL directly to Vision ───────────────────────────────
+      messages = [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: basePrompt },
+            { type: 'image_url', image_url: { url: file_url, detail: 'high' } },
+          ],
+        },
       ];
     }
 
@@ -85,44 +80,38 @@ Return ONLY valid JSON — no markdown, no explanation, no code block.`;
       },
       body: JSON.stringify({
         model: 'gpt-4o',
-        messages: [{ role: 'user', content: messageContent }],
+        messages,
         max_tokens: 1000,
         temperature: 0,
       }),
     });
 
-    // Clean up temporary OpenAI file (non-blocking)
-    const fileIdForCleanup = isPdf && messageContent[1]?.file?.file_id;
-    if (fileIdForCleanup) {
-      fetch(`https://api.openai.com/v1/files/${fileIdForCleanup}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${apiKey}` },
-      }).catch(() => {});
-    }
-
     if (!response.ok) {
       const errText = await response.text();
       console.error('OpenAI error:', errText);
-      return res.status(200).json({ status: 'error', output: null, detail: errText });
+      return res.status(200).json({ status: 'error', output: null, detail: errText.slice(0, 300) });
     }
 
     const data = await response.json();
-    const content = data.choices?.[0]?.message?.content?.trim() || '';
+    const rawContent = data.choices?.[0]?.message?.content?.trim() || '';
 
     try {
-      const jsonStr = content
+      const jsonStr = rawContent
         .replace(/^```json\s*/i, '')
         .replace(/^```\s*/i, '')
         .replace(/\s*```$/, '')
         .trim();
       const output = JSON.parse(jsonStr);
+      if (typeof output !== 'object' || output === null || Array.isArray(output)) {
+        throw new Error('not an object');
+      }
       return res.status(200).json({ status: 'success', output });
     } catch {
-      console.error('JSON parse failed. Raw content:', content);
+      console.error('JSON parse failed. Raw:', rawContent.slice(0, 500));
       return res.status(200).json({ status: 'error', output: null, detail: 'JSON parse failed' });
     }
   } catch (err) {
-    console.error('extract-receipt error:', err);
+    console.error('extract-receipt error:', err.message);
     return res.status(200).json({ status: 'error', output: null, detail: err.message });
   }
 }

@@ -358,31 +358,29 @@ export default function ReceiptReviewDialog({
                       </a>
                     </div>
                   </div>
-                  <div className="bg-muted rounded-xl overflow-hidden flex items-center justify-center min-h-[300px] max-h-[520px]">
-                    {isPdf ? (
-                      <object
-                        data={fileUrl || initialReceiptUrl}
-                        type="application/pdf"
-                        className="w-full h-[520px] rounded-xl"
-                      >
-                        <div className="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground">
-                          <FileText className="w-10 h-10" />
-                          <p className="text-sm">תצוגת PDF אינה זמינה בדפדפן זה</p>
-                          <a href={fileUrl || initialReceiptUrl} target="_blank" rel="noopener noreferrer"
-                            className="text-primary text-sm hover:underline flex items-center gap-1">
-                            <ExternalLink className="w-4 h-4" /> פתח PDF
-                          </a>
-                        </div>
-                      </object>
-                    ) : (
+                  {isPdf ? (
+                    <div className="bg-muted rounded-xl flex flex-col items-center justify-center gap-4 min-h-[200px] p-8 border-2 border-dashed border-border">
+                      <FileText className="w-14 h-14 text-primary/40" />
+                      <div className="text-center">
+                        <p className="font-medium text-sm">קובץ PDF</p>
+                        <p className="text-xs text-muted-foreground mt-1">ה-PDF נקרא אוטומטית — ניתן לפתוח לצפייה בנפרד</p>
+                      </div>
+                      <a href={fileUrl || initialReceiptUrl} target="_blank" rel="noopener noreferrer">
+                        <Button variant="outline" className="gap-2 rounded-xl">
+                          <ExternalLink className="w-4 h-4" /> פתח PDF בחלון חדש
+                        </Button>
+                      </a>
+                    </div>
+                  ) : (
+                    <div className="bg-muted rounded-xl overflow-hidden flex items-center justify-center min-h-[300px] max-h-[520px]">
                       <img
                         src={previewUrl || fileUrl || initialReceiptUrl}
                         alt="קבלה"
                         className="max-w-full max-h-[520px] object-contain transition-transform"
                         style={{ transform: `rotate(${rotation}deg)` }}
                       />
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
 
