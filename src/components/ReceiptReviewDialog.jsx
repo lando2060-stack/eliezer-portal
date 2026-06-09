@@ -25,7 +25,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Upload, Camera, FileText, Loader2, CheckCircle2, X, RotateCw, Download } from 'lucide-react';
+import { Upload, Camera, FileText, Loader2, CheckCircle2, X, RotateCw, Download, RefreshCw, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { PAYMENT_METHODS } from '@/lib/constants';
 
@@ -61,6 +61,7 @@ export default function ReceiptReviewDialog({
   const [previewUrl, setPreviewUrl] = useState('');
   const [extractedData, setExtractedData] = useState({});
   const [rotation, setRotation] = useState(0);
+  const [extractionFailed, setExtractionFailed] = useState(false);
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const queryClient = useQueryClient();
@@ -73,9 +74,9 @@ export default function ReceiptReviewDialog({
     if (open && initialReceiptUrl) {
       setFileUrl(initialReceiptUrl);
       setPreviewUrl(initialReceiptUrl);
-      runExtraction(initialReceiptUrl);
+      (async () => { await runExtraction(initialReceiptUrl); })();
     }
-  }, [open, initialReceiptUrl]);
+  }, [open, initialReceiptUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset when closed
   useEffect(() => {
@@ -86,11 +87,13 @@ export default function ReceiptReviewDialog({
       setPreviewUrl('');
       setExtractedData({});
       setRotation(0);
+      setExtractionFailed(false);
     }
   }, [open]);
 
   const runExtraction = async (url) => {
     setStep('processing');
+    setExtractionFailed(false);
     try {
       const result = await base44.integrations.Core.ExtractDataFromUploadedFile({
         file_url: url,
@@ -107,7 +110,7 @@ export default function ReceiptReviewDialog({
         } catch { /* non-fatal */ }
       }
 
-      if (result?.status === 'success' && result.output) {
+      if (result?.status === 'success' && result.output && Object.keys(result.output).length > 0) {
         setExtractedData({
           ...result.output,
           category: suggestedCategory || '',
@@ -115,13 +118,14 @@ export default function ReceiptReviewDialog({
           has_receipt: true,
           status: 'pending_approval',
         });
+        setExtractionFailed(false);
       } else {
-        toast.error('לא הצלחנו לחלץ נתונים — ניתן להזין ידנית');
         setExtractedData({ receipt_url: url, has_receipt: true, status: 'pending_approval' });
+        setExtractionFailed(true);
       }
     } catch {
-      toast.error('שגיאה בסריקת הקבלה — ניתן להזין פרטים ידנית');
       setExtractedData({ receipt_url: url, has_receipt: true, status: 'pending_approval' });
+      setExtractionFailed(true);
     }
     setStep('review');
   };
@@ -319,9 +323,25 @@ export default function ReceiptReviewDialog({
 
           {/* ── Review step ── */}
           {step === 'review' && (
+            <div className="space-y-3">
+              {/* Re-scan banner */}
+              {extractionFailed && (
+                <div className="flex items-center justify-between gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm">
+                  <p className="text-amber-800">לא הצלחנו לחלץ נתונים אוטומטית — ניתן להזין ידנית או לנסות שוב</p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 rounded-xl border-amber-300 text-amber-700 hover:bg-amber-100 flex-shrink-0"
+                    onClick={() => runExtraction(fileUrl || initialReceiptUrl)}
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> סרוק מחדש
+                  </Button>
+                </div>
+              )}
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Receipt preview */}
-              {(previewUrl || fileUrl) && (
+              {(previewUrl || fileUrl || initialReceiptUrl) && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium text-muted-foreground">תצוגת קבלה</p>
@@ -331,23 +351,34 @@ export default function ReceiptReviewDialog({
                           <RotateCw className="w-4 h-4" />
                         </Button>
                       )}
-                      {(fileUrl || initialReceiptUrl) && (
-                        <a href={fileUrl || initialReceiptUrl} target="_blank" rel="noopener noreferrer">
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <Download className="w-4 h-4" />
-                          </Button>
-                        </a>
-                      )}
+                      <a href={fileUrl || initialReceiptUrl} target="_blank" rel="noopener noreferrer">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" title="פתח בחלון חדש">
+                          <ExternalLink className="w-4 h-4" />
+                        </Button>
+                      </a>
                     </div>
                   </div>
-                  <div className="bg-muted rounded-xl overflow-hidden flex items-center justify-center min-h-[300px] max-h-[500px]">
+                  <div className="bg-muted rounded-xl overflow-hidden flex items-center justify-center min-h-[300px] max-h-[520px]">
                     {isPdf ? (
-                      <iframe src={previewUrl || fileUrl || initialReceiptUrl} className="w-full h-[500px] rounded-xl" title="קבלה" />
+                      <object
+                        data={fileUrl || initialReceiptUrl}
+                        type="application/pdf"
+                        className="w-full h-[520px] rounded-xl"
+                      >
+                        <div className="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground">
+                          <FileText className="w-10 h-10" />
+                          <p className="text-sm">תצוגת PDF אינה זמינה בדפדפן זה</p>
+                          <a href={fileUrl || initialReceiptUrl} target="_blank" rel="noopener noreferrer"
+                            className="text-primary text-sm hover:underline flex items-center gap-1">
+                            <ExternalLink className="w-4 h-4" /> פתח PDF
+                          </a>
+                        </div>
+                      </object>
                     ) : (
                       <img
                         src={previewUrl || fileUrl || initialReceiptUrl}
                         alt="קבלה"
-                        className="max-w-full max-h-[500px] object-contain transition-transform"
+                        className="max-w-full max-h-[520px] object-contain transition-transform"
                         style={{ transform: `rotate(${rotation}deg)` }}
                       />
                     )}
@@ -467,6 +498,7 @@ export default function ReceiptReviewDialog({
                   שמור הוצאה
                 </Button>
               </div>
+            </div>
             </div>
           )}
         </div>
