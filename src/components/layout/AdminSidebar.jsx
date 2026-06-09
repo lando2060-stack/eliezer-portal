@@ -2,17 +2,18 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, BarChart3, Users, FileText, Wallet,
-  Receipt, Settings, LogOut, Building2, Store
+  Receipt, Settings, LogOut, Building2, Store, BookOpen
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
 const navItems = [
-  { path: '/admin/dashboard', label: 'דשבורד מנהל', icon: LayoutDashboard },
-  { path: '/admin/stats',     label: 'סטטיסטיקות',  icon: BarChart3 },
-  { path: '/admin/agents',    label: 'סוכנים',       icon: Users },
-  { path: '/admin/deals',     label: 'עסקאות',       icon: FileText },
-  { path: '/admin/reports',   label: 'הכנסות',       icon: Wallet },
-  { path: '/admin/expenses',  label: 'הוצאות',       icon: Receipt },
+  { path: '/admin/dashboard',          label: 'ראשי', icon: LayoutDashboard },
+  { path: '/admin/stats',              label: 'סטטיסטיקות',  icon: BarChart3 },
+  { path: '/admin/agents',             label: 'סוכנים',       icon: Users },
+  { path: '/admin/deals',              label: 'עסקאות',       icon: FileText },
+  { path: '/admin/reports',            label: 'הכנסות',       icon: Wallet },
+  { path: '/admin/expenses',           label: 'הוצאות',       icon: Receipt },
+  { path: '/admin/financial-reports',  label: 'דוחות',        icon: BookOpen },
   { path: '/admin/vendors',   label: 'ספקים',        icon: Store },
   { path: '/admin/settings',  label: 'הגדרות',       icon: Settings },
 ];

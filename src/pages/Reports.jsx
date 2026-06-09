@@ -254,23 +254,6 @@ export default function Reports() {
             <FiltersBar onExportCSV={exportDealsCSV} />
           </div>
 
-          {isAdminView && selectedAgent === 'all' && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {agents.filter(a => deals.some(d => d.agent_id === a.id)).map(a => {
-                const ad = deals.filter(d => d.agent_id === a.id);
-                return (
-                  <Card key={a.id} className="rounded-xl">
-                    <CardContent className="p-3">
-                      <p className="font-semibold text-sm">{a.name}</p>
-                      <p className="text-xs text-muted-foreground">{ad.length} עסקאות</p>
-                      <p className="text-sm font-bold text-emerald-700 mt-1">{formatCurrency(ad.reduce((s, d) => s + (d.agent_commission || 0), 0))}</p>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-
           <Card className="rounded-2xl overflow-hidden">
             <div className="overflow-x-auto">
               <Table>

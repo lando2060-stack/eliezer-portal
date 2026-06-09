@@ -292,26 +292,74 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Admin: סוכנים פעילים */}
-      {isAdminView && agents.length > 0 && (
+      {/* Admin: הכנסות אחרונות */}
+      {isAdminView && (
         <Card className="rounded-2xl">
-          <CardContent className="p-5 space-y-3">
+          <CardContent className="p-5 space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold">סוכנים פעילים</h2>
-              <Link to={agentsPath} className="text-sm text-primary hover:underline">ניהול סוכנים</Link>
+              <h2 className="font-semibold">הכנסות אחרונות</h2>
+              <Link to={dealsPath} className="text-sm text-primary hover:underline">כל ההכנסות</Link>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {agents.filter(a => a.is_active).map(a => {
-                const agentDeals = allDeals.filter(d => d.agent_id === a.id && d.month === thisMonth);
-                const agentTotal = agentDeals.reduce((s, d) => s + (d.agent_commission || 0), 0);
-                return (
-                  <div key={a.id} className="p-3 bg-muted/50 rounded-xl">
-                    <p className="font-medium text-sm">{a.name}</p>
-                    <p className="text-xs text-muted-foreground">{agentDeals.length} עסקאות • {formatCurrency(agentTotal)}</p>
+            {allDeals.slice(0, 5).length === 0 ? (
+              <p className="text-center py-4 text-muted-foreground text-sm">אין עסקאות עדיין</p>
+            ) : (
+              <div className="space-y-2">
+                {allDeals.slice(0, 5).map(d => {
+                  const st = DEAL_STATUS_MAP[d.status] || DEAL_STATUS_MAP['פתוחה'];
+                  return (
+                    <div key={d.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                      <div>
+                        <p className="font-medium text-sm">{d.client_name}</p>
+                        <p className="text-xs text-muted-foreground">{d.address || ''}{d.agent_name ? ` • ${d.agent_name}` : ''}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold text-sm text-emerald-700">{formatCurrency(d.commission_amount)}</p>
+                        <Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Admin: הוצאות אחרונות */}
+      {isAdminView && (
+        <Card className="rounded-2xl">
+          <CardContent className="p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold">הוצאות אחרונות</h2>
+              <Link to={expensesPath} className="text-sm text-primary hover:underline">כל ההוצאות</Link>
+            </div>
+            {allExpenses.slice(0, 5).length === 0 ? (
+              <p className="text-center py-4 text-muted-foreground text-sm">אין הוצאות עדיין</p>
+            ) : (
+              <div className="space-y-2">
+                {allExpenses.slice(0, 5).map(e => (
+                  <div key={e.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                    <div>
+                      <p className="font-medium text-sm">{e.vendor_name}</p>
+                      <p className="text-xs text-muted-foreground">{e.category || ''} • {e.date}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold text-sm">{formatCurrency(e.total_amount)}</p>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        e.status === 'pending_approval' ? 'bg-amber-100 text-amber-700' :
+                        e.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
+                        e.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                        'bg-gray-100 text-gray-600'
+                      }`}>
+                        {e.status === 'pending_approval' ? 'ממתינה לאישור' :
+                         e.status === 'approved' ? 'מאושרת' :
+                         e.status === 'rejected' ? 'נדחתה' : e.status}
+                      </span>
+                    </div>
                   </div>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

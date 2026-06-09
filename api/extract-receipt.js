@@ -6,7 +6,7 @@
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { file_url, json_schema } = req.body;
+  const { file_url, json_schema } = req.body ?? {};
   if (!file_url) return res.status(400).json({ error: 'file_url is required' });
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -56,7 +56,7 @@ Return ONLY valid JSON — no markdown, no code block, no explanation.`;
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1024,
+        max_tokens: 2048,
         messages: [{
           role: 'user',
           content: [contentBlock, { type: 'text', text: prompt }],

@@ -22,6 +22,7 @@ import Deals from '@/pages/Deals';
 import Expenses from '@/pages/Expenses';
 import Agents from '@/pages/Agents';
 import Reports from '@/pages/Reports';
+import FinancialReports from '@/pages/FinancialReports';
 import Settings from '@/pages/Settings';
 import UploadReceipt from '@/pages/UploadReceipt';
 import Statistics from '@/pages/Statistics';
@@ -77,6 +78,7 @@ function AuthenticatedApp() {
           <Route path="/admin/agents" element={<Agents />} />
           <Route path="/admin/expenses" element={<Expenses />} />
           <Route path="/admin/reports" element={<Reports />} />
+          <Route path="/admin/financial-reports" element={<FinancialReports />} />
           <Route path="/admin/stats" element={<Statistics />} />
           <Route path="/admin/settings" element={<Settings />} />
           <Route path="/admin/upload" element={<UploadReceipt />} />
