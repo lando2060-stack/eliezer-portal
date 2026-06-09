@@ -199,6 +199,7 @@ export default function ReceiptReviewDialog({
         receipt_url:      data.receipt_url || '',
         has_receipt:      !!data.receipt_url,
         status:           'pending_approval',
+        scope:            'office',
         agent_id:         data.agent_id || '',
         agent_name:       data.agent_name || '',
         vendor_address:   data.vendor_address || '',
@@ -274,7 +275,7 @@ export default function ReceiptReviewDialog({
       onClose();
     },
     onError: (err) => {
-      if (err.message !== 'cancelled') toast.error('שגיאה בשמירה');
+      if (err.message !== 'cancelled') toast.error(`שגיאה בשמירה: ${err.message}`);
     },
   });
 
@@ -399,18 +400,11 @@ export default function ReceiptReviewDialog({
                   </div>
                   {isPdf ? (
                     <div className="bg-muted rounded-xl overflow-hidden" style={{ height: 520 }}>
-                      {pdfBlobUrl ? (
-                        <iframe
-                          src={pdfBlobUrl}
-                          className="w-full h-full rounded-xl border-0"
-                          title="PDF קבלה"
-                        />
-                      ) : (
-                        <div className="flex flex-col items-center justify-center gap-4 h-full text-muted-foreground">
-                          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                          <p className="text-sm">טוען PDF...</p>
-                        </div>
-                      )}
+                      <iframe
+                        src={`https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl || initialReceiptUrl)}&embedded=true`}
+                        className="w-full h-full rounded-xl border-0"
+                        title="PDF קבלה"
+                      />
                     </div>
                   ) : (
                     <div className="bg-muted rounded-xl overflow-hidden flex items-center justify-center min-h-[300px] max-h-[520px]">

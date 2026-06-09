@@ -14,13 +14,16 @@ export default async function handler(req, res) {
 
   const schemaStr = json_schema ? JSON.stringify(json_schema) : null;
   const prompt = `You are a receipt/invoice data extractor for an Israeli real-estate agency.
+The document is likely in Hebrew. Read Hebrew text carefully and accurately.
 ${schemaStr ? `Return a JSON object matching this schema: ${schemaStr}` : 'Return a JSON object with all relevant receipt/invoice fields.'}
 Rules:
-- Dates → YYYY-MM-DD
-- Amounts → plain numbers, no ₪ symbols
-- Currency → ILS unless clearly otherwise
+- Dates → YYYY-MM-DD format (Israeli dates are DD/MM/YYYY — convert correctly)
+- Amounts → plain numbers only, no ₪ or currency symbols
+- currency → "ILS" unless clearly otherwise
+- vendor_name → exact Hebrew business name as written
 - Omit fields not present in the document
-Return ONLY valid JSON — no markdown, no explanation.`;
+- Double-check all numbers for accuracy
+Return ONLY valid JSON — no markdown, no code block, no explanation.`;
 
   try {
     const fileRes = await fetch(file_url);
@@ -52,7 +55,7 @@ Return ONLY valid JSON — no markdown, no explanation.`;
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: 'claude-sonnet-4-6',
         max_tokens: 1024,
         messages: [{
           role: 'user',
