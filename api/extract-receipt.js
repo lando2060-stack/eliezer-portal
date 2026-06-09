@@ -48,7 +48,7 @@ Return ONLY valid JSON — no markdown, no explanation.`;
     }
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -70,7 +70,14 @@ Return ONLY valid JSON — no markdown, no explanation.`;
     if (!response.ok) {
       const errText = await response.text();
       console.error('Gemini error:', errText);
-      return res.status(200).json({ status: 'error', output: null, detail: errText.slice(0, 300) });
+      const isQuota = response.status === 429;
+      return res.status(200).json({
+        status: 'error',
+        output: null,
+        detail: isQuota
+          ? 'חרגת ממגבלת הקוטה של Gemini — המתן דקה ונסה שוב, או הפעל חיוב ב-Google Cloud Console'
+          : errText.slice(0, 300),
+      });
     }
 
     const data = await response.json();
