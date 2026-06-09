@@ -62,6 +62,7 @@ export default function ReceiptReviewDialog({
   const [extractedData, setExtractedData] = useState({});
   const [rotation, setRotation] = useState(0);
   const [extractionFailed, setExtractionFailed] = useState(false);
+  const [extractionError, setExtractionError] = useState('');
   const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
@@ -108,6 +109,7 @@ export default function ReceiptReviewDialog({
       setExtractedData({});
       setRotation(0);
       setExtractionFailed(false);
+      setExtractionError('');
       setPdfBlobUrl(null);
     }
   }, [open]);
@@ -115,11 +117,15 @@ export default function ReceiptReviewDialog({
   const runExtraction = async (url) => {
     setStep('processing');
     setExtractionFailed(false);
+    setExtractionError('');
     try {
-      const result = await base44.integrations.Core.ExtractDataFromUploadedFile({
-        file_url: url,
-        json_schema: EXTRACT_SCHEMA,
+      // Call directly so we can read the error detail
+      const res = await fetch('/api/extract-receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_url: url, json_schema: EXTRACT_SCHEMA }),
       });
+      const result = await res.json();
 
       let suggestedCategory = '';
       if (result?.status === 'success' && result.output?.vendor_name && categories.length > 0) {
@@ -141,10 +147,13 @@ export default function ReceiptReviewDialog({
         });
         setExtractionFailed(false);
       } else {
+        const detail = result?.detail || result?.error || 'תשובה ריקה מ-AI';
+        setExtractionError(detail);
         setExtractedData({ receipt_url: url, has_receipt: true, status: 'pending_approval' });
         setExtractionFailed(true);
       }
-    } catch {
+    } catch (err) {
+      setExtractionError(err.message || 'שגיאת רשת');
       setExtractedData({ receipt_url: url, has_receipt: true, status: 'pending_approval' });
       setExtractionFailed(true);
     }
@@ -347,16 +356,25 @@ export default function ReceiptReviewDialog({
             <div className="space-y-3">
               {/* Re-scan banner */}
               {extractionFailed && (
-                <div className="flex items-center justify-between gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm">
-                  <p className="text-amber-800">לא הצלחנו לחלץ נתונים אוטומטית — ניתן להזין ידנית או לנסות שוב</p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1.5 rounded-xl border-amber-300 text-amber-700 hover:bg-amber-100 flex-shrink-0"
-                    onClick={() => runExtraction(fileUrl || initialReceiptUrl)}
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" /> סרוק מחדש
-                  </Button>
+                <div className="flex flex-col gap-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-amber-800 font-medium">לא הצלחנו לחלץ נתונים אוטומטית</p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 rounded-xl border-amber-300 text-amber-700 hover:bg-amber-100 flex-shrink-0"
+                      onClick={() => runExtraction(fileUrl || initialReceiptUrl)}
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" /> סרוק מחדש
+                    </Button>
+                  </div>
+                  {extractionError && (
+                    <p className="text-xs text-amber-700 font-mono bg-amber-100 px-2 py-1 rounded-lg break-all">
+                      {extractionError.includes('GEMINI_API_KEY') || extractionError.includes('not configured')
+                        ? '⚠️ מפתח Gemini לא מוגדר — כנס ל-Vercel → Settings → Environment Variables → הוסף GEMINI_API_KEY'
+                        : extractionError}
+                    </p>
+                  )}
                 </div>
               )}
 
