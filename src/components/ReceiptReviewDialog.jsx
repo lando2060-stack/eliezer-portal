@@ -213,60 +213,48 @@ export default function ReceiptReviewDialog({
         agent_name:       data.agent_name || '',
       };
 
+      // Save expense — minimal, no side-effects that could fail
       let expense;
       if (expenseId) {
         expense = await base44.entities.Expense.update(expenseId, payload);
       } else {
-        // Duplicate check
-        if (payload.vendor_name && payload.total_amount && payload.date) {
-          const existing = await base44.entities.Expense.filter({
-            vendor_name: payload.vendor_name,
-            total_amount: payload.total_amount,
-            date: payload.date,
-          });
-          if (existing.length > 0) {
-            const ok = window.confirm('נראה שקבלה דומה כבר קיימת. להמשיך בשמירה?');
-            if (!ok) throw new Error('cancelled');
-          }
-        }
         expense = await base44.entities.Expense.create(payload);
       }
 
-      // Update/create vendor record
-      if (payload.vendor_name) {
-        const vendors = await base44.entities.Vendor.filter({ name: payload.vendor_name });
-        if (vendors.length > 0) {
-          await base44.entities.Vendor.update(vendors[0].id, {
-            receipt_count: (vendors[0].receipt_count || 0) + (expenseId ? 0 : 1),
-            total_expenses: (vendors[0].total_expenses || 0) + (expenseId ? 0 : (payload.total_amount || 0)),
-            last_expense_date: payload.date || vendors[0].last_expense_date,
-            default_category: payload.category || vendors[0].default_category,
-          });
-        } else if (!expenseId) {
-          await base44.entities.Vendor.create({
-            name: payload.vendor_name,
-            tax_id: payload.vendor_tax_id || '',
-            default_category: payload.category || '',
-            receipt_count: 1,
-            total_expenses: payload.total_amount || 0,
-            last_expense_date: payload.date,
-            address: payload.vendor_address || '',
-            phone: payload.vendor_phone || '',
-          });
-        }
+      // Non-blocking: update vendor stats (failures don't affect save)
+      if (payload.vendor_name && !expenseId) {
+        Promise.resolve().then(async () => {
+          try {
+            const vendors = await base44.entities.Vendor.filter({ name: payload.vendor_name });
+            if (vendors.length > 0) {
+              await base44.entities.Vendor.update(vendors[0].id, {
+                receipt_count: (vendors[0].receipt_count || 0) + 1,
+                total_expenses: (vendors[0].total_expenses || 0) + (payload.total_amount || 0),
+                last_expense_date: payload.date || vendors[0].last_expense_date,
+                default_category: payload.category || vendors[0].default_category,
+              });
+            } else {
+              await base44.entities.Vendor.create({
+                name: payload.vendor_name,
+                tax_id: payload.vendor_tax_id || '',
+                default_category: payload.category || '',
+                receipt_count: 1,
+                total_expenses: payload.total_amount || 0,
+                last_expense_date: payload.date,
+              });
+            }
+          } catch { /* non-fatal */ }
+        });
       }
 
-      // Upload to Google Drive (non-blocking)
+      // Non-blocking: upload to Google Drive
       if (expense?.receipt_url) {
-        const ext = expense.receipt_url.split('.').pop()?.split('?')[0] || 'jpg';
-        const fileName = `${payload.vendor_name || 'קבלה'}_${payload.date || new Date().toISOString().slice(0,10)}.${ext}`;
         supabase.auth.getSession().then(({ data: { session } }) => {
+          const ext = expense.receipt_url.split('.').pop()?.split('?')[0] || 'jpg';
+          const fileName = `${payload.vendor_name || 'קבלה'}_${payload.date || new Date().toISOString().slice(0,10)}.${ext}`;
           fetch('/api/google/upload-to-drive', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
-            },
+            headers: { 'Content-Type': 'application/json', ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}) },
             body: JSON.stringify({ file_url: expense.receipt_url, file_name: fileName }),
           }).catch(() => {});
         });
