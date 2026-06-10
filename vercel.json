@@ -1,6 +1,7 @@
 {
   "functions": {
     "api/extract-receipt.js": { "maxDuration": 30 },
+    "api/proxy-file.js": { "maxDuration": 15 },
     "api/google/scan-gmail.js": { "maxDuration": 60 }
   },
   "rewrites": [

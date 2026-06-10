@@ -282,13 +282,20 @@ export default function ReceiptReviewDialog({
     },
   });
 
-  const displayUrl = previewUrl || fileUrl || initialReceiptUrl || '';
+  const rawUrl = previewUrl || fileUrl || initialReceiptUrl || '';
+  // Route remote Supabase URLs through our proxy to bypass NetFree CDN blocking
+  const toProxyUrl = (u) =>
+    u && !u.startsWith('blob:') && !u.startsWith('data:') && u.includes('supabase.co')
+      ? `/api/proxy-file?url=${encodeURIComponent(u)}`
+      : u;
+  const displayUrl = file ? rawUrl : toProxyUrl(rawUrl);
+
   // Known PDF: has .pdf in URL or local file type
   const isPdf = file?.type === 'application/pdf' ||
     file?.name?.toLowerCase().endsWith('.pdf') ||
-    /\.pdf(\?|$)/i.test(displayUrl);
+    /\.pdf(\?|$)/i.test(rawUrl);
   // Unknown extension (gmail_, UUID, etc.) — use iframe which handles both PDFs and images
-  const isUnknownType = !file && displayUrl && !/\.(jpg|jpeg|png|webp|gif|heic|pdf)(\?|$)/i.test(displayUrl);
+  const isUnknownType = !file && rawUrl && !/\.(jpg|jpeg|png|webp|gif|heic|pdf)(\?|$)/i.test(rawUrl);
   // Show as iframe when: known PDF, unknown type, or img failed
   const useIframe = isPdf || isUnknownType || imgFailed;
 
