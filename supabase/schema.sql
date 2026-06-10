@@ -44,6 +44,9 @@ create table if not exists agents (
   user_id            text not null default ''
 );
 
+-- permissions column for per-agent granular access control
+alter table agents add column if not exists permissions jsonb not null default '{}'::jsonb;
+
 -- ── Categories ───────────────────────────────────────────────
 create table if not exists categories (
   id         uuid primary key default gen_random_uuid(),

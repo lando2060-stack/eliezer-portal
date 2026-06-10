@@ -32,9 +32,16 @@ export default function DealDetailDialog({ deal, agents, currentUser, onEdit, on
   });
 
   const deletePayment = useMutation({
-    mutationFn: (id) => base44.entities.Payment.delete(id),
+    mutationFn: async (payment) => {
+      await base44.entities.Payment.delete(payment.id);
+      const allPayments = await base44.entities.Payment.filter({ deal_id: deal.id });
+      const newCollected = allPayments.reduce((s, p) => s + (p.amount || 0), 0);
+      await base44.entities.Deal.update(deal.id, { collected_actual: newCollected });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payments', deal.id] });
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
       toast.success('ההכנסה נמחקה');
     },
     onError: () => toast.error('שגיאה במחיקת ההכנסה'),
@@ -76,7 +83,7 @@ export default function DealDetailDialog({ deal, agents, currentUser, onEdit, on
               <p className="text-xs font-semibold text-muted-foreground mb-2">נתונים פיננסיים</p>
               <InfoRow label="סכום עסקה" value={formatCurrency(deal.deal_amount)} />
               <InfoRow label="סכום עמלה" value={formatCurrency(deal.commission_amount)} />
-              <InfoRow label="נגבה בפועל" value={formatCurrency(deal.collected_actual)} />
+              <InfoRow label="נגבה בפועל" value={formatCurrency(totalPayments)} />
               <InfoRow label="עמלת סוכן" value={formatCurrency(deal.agent_commission)} />
               <InfoRow label="עמלת משרד" value={formatCurrency(deal.office_commission)} />
               <InfoRow label="שולם לסוכן" value={formatCurrency(deal.paid_to_agent)} />
@@ -141,7 +148,7 @@ export default function DealDetailDialog({ deal, agents, currentUser, onEdit, on
                         {admin && (
                           <TableCell>
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
-                              onClick={() => { if (window.confirm('למחוק הכנסה זו?')) deletePayment.mutate(p.id); }}>
+                              onClick={() => { if (window.confirm('למחוק הכנסה זו?')) deletePayment.mutate(p); }}>
                               <Trash2 className="w-3 h-3" />
                             </Button>
                           </TableCell>

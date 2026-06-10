@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { formatCurrency, DEAL_STATUS_MAP } from '@/lib/constants';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -14,35 +15,14 @@ import {
 } from 'recharts';
 import {
   BookOpen, TrendingUp, TrendingDown, DollarSign, Percent,
-  Download, Printer, Calendar,
+  Download, Printer,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const formatShort = (v) => `₪${(v / 1000).toFixed(0)}k`;
 
-const THIS_YEAR  = new Date().getFullYear();
-const THIS_MONTH = `${THIS_YEAR}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+const THIS_MONTH = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
 
-function getMonthRange(preset, customFrom, customTo) {
-  const now = new Date();
-  if (preset === 'this_month') {
-    return { from: THIS_MONTH, to: THIS_MONTH };
-  }
-  if (preset === 'this_quarter') {
-    const q = Math.floor(now.getMonth() / 3);
-    const from = `${THIS_YEAR}-${String(q * 3 + 1).padStart(2, '0')}`;
-    const to   = `${THIS_YEAR}-${String(q * 3 + 3).padStart(2, '0')}`;
-    return { from, to };
-  }
-  if (preset === 'this_year') {
-    return { from: `${THIS_YEAR}-01`, to: `${THIS_YEAR}-12` };
-  }
-  if (preset === 'last_year') {
-    return { from: `${THIS_YEAR - 1}-01`, to: `${THIS_YEAR - 1}-12` };
-  }
-  if (preset === 'all') return { from: null, to: null };
-  return { from: customFrom || null, to: customTo || null };
-}
 
 function KpiCard({ label, value, sub, icon: Icon, color }) {
   return (
@@ -63,29 +43,26 @@ function KpiCard({ label, value, sub, icon: Icon, color }) {
 
 export default function FinancialReports() {
   const printRef = useRef(null);
-  const [preset, setPreset]       = useState('this_year');
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo]     = useState('');
+  const [dateFrom, setDateFrom] = useState(THIS_MONTH);
+  const [dateTo, setDateTo]     = useState(THIS_MONTH);
   const [agentFilter, setAgentFilter] = useState('all');
 
   const { data: agents   = [] } = useQuery({ queryKey: ['agents'],   queryFn: () => base44.entities.Agent.list() });
   const { data: allDeals = [] } = useQuery({ queryKey: ['deals'],    queryFn: () => base44.entities.Deal.list('-created_date', 500) });
   const { data: allExpenses = [] } = useQuery({ queryKey: ['expenses'], queryFn: () => base44.entities.Expense.list('-date', 500) });
 
-  const { from, to } = getMonthRange(preset, customFrom, customTo);
-
   const inRange = (month) => {
     if (!month) return false;
-    if (from && month < from) return false;
-    if (to   && month > to)   return false;
+    if (dateFrom && month < dateFrom) return false;
+    if (dateTo   && month > dateTo)   return false;
     return true;
   };
 
   const inDateRange = (dateStr) => {
     if (!dateStr) return false;
     const m = dateStr.slice(0, 7);
-    if (from && m < from) return false;
-    if (to   && m > to)   return false;
+    if (dateFrom && m < dateFrom) return false;
+    if (dateTo   && m > dateTo)   return false;
     return true;
   };
 
@@ -93,13 +70,13 @@ export default function FinancialReports() {
     let d = allDeals.filter(x => inRange(x.month));
     if (agentFilter !== 'all') d = d.filter(x => x.agent_id === agentFilter);
     return d;
-  }, [allDeals, from, to, agentFilter]);
+  }, [allDeals, dateFrom, dateTo, agentFilter]);
 
   const expenses = useMemo(() => {
     let e = allExpenses.filter(x => inDateRange(x.date));
     if (agentFilter !== 'all') e = e.filter(x => x.agent_id === agentFilter);
     return e;
-  }, [allExpenses, from, to, agentFilter]);
+  }, [allExpenses, dateFrom, dateTo, agentFilter]);
 
   // ── KPIs ─────────────────────────────────────────────────
   const kpi = useMemo(() => {
@@ -120,8 +97,8 @@ export default function FinancialReports() {
       ...allExpenses.map(e => e.date?.slice(0, 7)).filter(Boolean),
     ]);
     return [...months].sort().filter(m => {
-      if (from && m < from) return false;
-      if (to   && m > to)   return false;
+      if (dateFrom && m < dateFrom) return false;
+      if (dateTo   && m > dateTo)   return false;
       return true;
     }).map(m => {
       const mDeals = deals.filter(d => d.month === m);
@@ -132,7 +109,7 @@ export default function FinancialReports() {
         הוצאות: Math.round(mExp.reduce((s, e) => s + (e.total_amount || 0), 0)),
       };
     });
-  }, [deals, expenses, from, to]);
+  }, [deals, expenses, dateFrom, dateTo]);
 
   // ── Per-agent table ──────────────────────────────────────
   const agentRows = useMemo(() => {
@@ -214,76 +191,52 @@ export default function FinancialReports() {
     ];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(catData), 'הוצאות לפי קטגוריה');
 
-    XLSX.writeFile(wb, `דוחות_${preset}.xlsx`);
+    XLSX.writeFile(wb, `דוחות_${dateFrom || 'כל'}_${dateTo || 'הזמנים'}.xlsx`);
   };
 
   const handlePrint = () => window.print();
 
-  const periodLabel = {
-    this_month: 'החודש הנוכחי', this_quarter: 'הרבעון הנוכחי',
-    this_year: 'השנה הנוכחית', last_year: 'שנה שעברה',
-    all: 'כל הזמנים', custom: 'טווח מותאם',
-  }[preset];
-
   return (
     <div className="space-y-6 print:space-y-4" ref={printRef}>
       {/* Header */}
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <BookOpen className="w-6 h-6 text-primary" /> דוחות כספיים
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">{periodLabel}</p>
-        </div>
-        <div className="flex gap-2 print:hidden">
-          <Button variant="outline" size="sm" onClick={exportExcel} className="gap-1.5">
-            <Download className="w-4 h-4" /> Excel
-          </Button>
-          <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5">
-            <Printer className="w-4 h-4" /> הדפסה
-          </Button>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <BookOpen className="w-6 h-6 text-primary" /> דוחות כספיים
+        </h1>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2 print:hidden">
-        <Select value={preset} onValueChange={setPreset}>
-          <SelectTrigger className="w-44 rounded-xl">
-            <Calendar className="w-4 h-4 ml-1 text-muted-foreground" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="this_month">החודש הנוכחי</SelectItem>
-            <SelectItem value="this_quarter">הרבעון הנוכחי</SelectItem>
-            <SelectItem value="this_year">השנה הנוכחית</SelectItem>
-            <SelectItem value="last_year">שנה שעברה</SelectItem>
-            <SelectItem value="all">כל הזמנים</SelectItem>
-            <SelectItem value="custom">טווח מותאם</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {preset === 'custom' && (
-          <>
-            <input type="month" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
-              className="border rounded-xl px-3 py-1.5 text-sm" />
-            <span className="self-center text-muted-foreground">—</span>
-            <input type="month" value={customTo} onChange={e => setCustomTo(e.target.value)}
-              className="border rounded-xl px-3 py-1.5 text-sm" />
-          </>
-        )}
-
-        <Select value={agentFilter} onValueChange={setAgentFilter}>
-          <SelectTrigger className="w-44 rounded-xl">
-            <SelectValue placeholder="כל הסוכנים" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">כל הסוכנים</SelectItem>
-            {agents.map(a => (
-              <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <Card className="rounded-2xl print:hidden">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex flex-wrap gap-3">
+            <Select value={agentFilter} onValueChange={setAgentFilter}>
+              <SelectTrigger className="w-40 rounded-xl">
+                <SelectValue placeholder="כל הסוכנים" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">כל הסוכנים</SelectItem>
+                {agents.map(a => (
+                  <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">טווח תאריכים:</span>
+            <Input type="month" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-36 rounded-xl" />
+            <span className="text-muted-foreground text-sm">—</span>
+            <Input type="month" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-36 rounded-xl" />
+            <div className="flex gap-2 mr-auto">
+              <Button variant="outline" size="sm" onClick={exportExcel} className="gap-1.5 rounded-xl">
+                <Download className="w-4 h-4" /> Excel
+              </Button>
+              <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5 rounded-xl">
+                <Printer className="w-4 h-4" /> הדפסה
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

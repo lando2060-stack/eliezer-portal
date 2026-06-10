@@ -41,9 +41,10 @@ export default function Agents() {
     const map = {};
     for (const deal of allDeals) {
       if (!deal.agent_id) continue;
-      if (!map[deal.agent_id]) map[deal.agent_id] = { count: 0, income: 0 };
+      if (!map[deal.agent_id]) map[deal.agent_id] = { count: 0, agentIncome: 0, officeIncome: 0 };
       map[deal.agent_id].count++;
-      map[deal.agent_id].income += deal.agent_commission || 0;
+      map[deal.agent_id].agentIncome += deal.agent_commission || 0;
+      map[deal.agent_id].officeIncome += deal.office_commission || 0;
     }
     return map;
   }, [allDeals]);
@@ -168,7 +169,8 @@ export default function Agents() {
               <TableHead className="text-right">מייל</TableHead>
               <TableHead className="text-right">עמלה %</TableHead>
               <TableHead className="text-right">עסקאות</TableHead>
-              <TableHead className="text-right">נכנס</TableHead>
+              <TableHead className="text-right">עמלת סוכן</TableHead>
+              <TableHead className="text-right">עמלת משרד</TableHead>
               <TableHead className="text-right">סטטוס</TableHead>
               <TableHead className="text-right">פעיל</TableHead>
               <TableHead className="w-24"></TableHead>
@@ -176,11 +178,11 @@ export default function Agents() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground">טוען...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center py-12 text-muted-foreground">טוען...</TableCell></TableRow>
             ) : agents.length === 0 ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground">אין סוכנים עדיין</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center py-12 text-muted-foreground">אין סוכנים עדיין</TableCell></TableRow>
             ) : agents.map(agent => {
-              const stats = agentStats[agent.id] || { count: 0, income: 0 };
+              const stats = agentStats[agent.id] || { count: 0, agentIncome: 0, officeIncome: 0 };
               return (
               <TableRow key={agent.id} className="hover:bg-muted/30">
                 <TableCell className="font-semibold">{agent.name}</TableCell>
@@ -188,7 +190,8 @@ export default function Agents() {
                 <TableCell className="text-sm text-muted-foreground">{agent.email || '-'}</TableCell>
                 <TableCell className="font-medium">{agent.commission_percent || 0}%</TableCell>
                 <TableCell className="font-medium text-blue-700">{stats.count}</TableCell>
-                <TableCell className="font-medium text-emerald-700">{formatCurrency(stats.income)}</TableCell>
+                <TableCell className="font-medium text-emerald-700">{formatCurrency(stats.agentIncome)}</TableCell>
+                <TableCell className="font-medium text-primary">{formatCurrency(stats.officeIncome)}</TableCell>
                 <TableCell>{statusBadge(agent)}</TableCell>
                 <TableCell>
                   <Switch

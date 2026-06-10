@@ -26,16 +26,26 @@ export default function AddPaymentDialog({ deal, onClose }) {
   const amount = parseFloat(form.amount) || 0;
 
   const mutation = useMutation({
-    mutationFn: () => base44.entities.Payment.create({
-      ...form,
-      amount,
-      deal_id: deal.id,
-      deal_client_name: deal.client_name,
-      deal_address: deal.address || '',
-    }),
+    mutationFn: async () => {
+      await base44.entities.Payment.create({
+        amount,
+        date: form.date,
+        payment_method: form.payment_method,
+        notes: form.notes,
+        deal_id: deal.id,
+        deal_client_name: deal.client_name,
+        deal_address: deal.address || '',
+        agent_id: deal.agent_id || '',
+        agent_name: deal.agent_name || '',
+      });
+      const allPayments = await base44.entities.Payment.filter({ deal_id: deal.id });
+      const newCollected = allPayments.reduce((s, p) => s + (p.amount || 0), 0);
+      await base44.entities.Deal.update(deal.id, { collected_actual: newCollected });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payments', deal.id] });
       queryClient.invalidateQueries({ queryKey: ['payments'] });
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
       toast.success('ההכנסה נוספה בהצלחה');
       onClose();
     },

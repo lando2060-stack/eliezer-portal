@@ -4,9 +4,9 @@ import { Plus, X, FileText, TrendingUp, Receipt } from 'lucide-react';
 import ReceiptReviewDialog from '@/components/ReceiptReviewDialog';
 
 const actions = [
-  { label: 'הוסף עסקה',   icon: FileText,   color: 'bg-blue-500',   path: '/admin/deals?new=1' },
-  { label: 'הוסף הכנסה',  icon: TrendingUp, color: 'bg-emerald-500', path: '/admin/reports' },
-  { label: 'הוסף הוצאה',  icon: Receipt,    color: 'bg-amber-500',  path: null },
+  { key: 'deal',    label: 'הוסף עסקה',   icon: FileText,   color: 'bg-blue-500' },
+  { key: 'income',  label: 'הוסף הכנסה',  icon: TrendingUp, color: 'bg-emerald-500' },
+  { key: 'expense', label: 'הוסף הוצאה',  icon: Receipt,    color: 'bg-amber-500' },
 ];
 
 export default function AdminFab() {
@@ -16,10 +16,16 @@ export default function AdminFab() {
 
   const handleAction = (action) => {
     setOpen(false);
-    if (action.path) {
-      navigate(action.path);
-    } else {
-      setShowReceiptDialog(true);
+    switch (action.key) {
+      case 'deal':
+        navigate('/admin/deals?new=1');
+        break;
+      case 'income':
+        navigate('/admin/reports', { state: { openPicker: true } });
+        break;
+      case 'expense':
+        setShowReceiptDialog(true);
+        break;
     }
   };
 

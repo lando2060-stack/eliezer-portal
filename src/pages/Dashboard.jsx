@@ -4,8 +4,9 @@ import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Link } from 'react-router-dom';
-import { TrendingUp, DollarSign, FileText, AlertCircle } from 'lucide-react';
-import { formatCurrency, DEAL_STATUS_MAP } from '@/lib/constants';
+import { TrendingUp, TrendingDown, DollarSign, FileText, Users, Building2 } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { formatCurrency, DEAL_STATUS_MAP, STATUS_MAP } from '@/lib/constants';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useIsAdminView } from '@/hooks/useIsAdminView';
 import { format } from 'date-fns';
@@ -43,19 +44,24 @@ export default function Dashboard() {
   const now = new Date();
   const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
+  const regularExpenses = useMemo(() => allExpenses.filter(e => e.status !== 'gmail_inbox'), [allExpenses]);
+
   const stats = useMemo(() => {
     const monthDeals = deals.filter(d => d.month === thisMonth);
+    const monthExpenses = regularExpenses.filter(e => e.date?.startsWith(thisMonth));
     return {
       monthDeals,
       totalCommission: monthDeals.reduce((s, d) => s + (d.commission_amount || 0), 0),
       totalCollected: monthDeals.reduce((s, d) => s + (d.collected_actual || 0), 0),
       totalAgentCommission: monthDeals.reduce((s, d) => s + (d.agent_commission || 0), 0),
+      totalOfficeCommission: monthDeals.reduce((s, d) => s + (d.office_commission || 0), 0),
       totalPaidToAgent: monthDeals.reduce((s, d) => s + (d.paid_to_agent || 0), 0),
-      pendingExpenses: expenses.filter(e => e.status === 'pending_approval').length,
+      pendingExpenses: regularExpenses.filter(e => e.status === 'pending_approval').length,
+      totalMonthExpenses: monthExpenses.reduce((s, e) => s + (e.total_amount || 0), 0),
     };
-  }, [deals, expenses, thisMonth]);
+  }, [deals, regularExpenses, thisMonth]);
 
-  const { monthDeals, totalCommission, totalCollected, totalAgentCommission, totalPaidToAgent, pendingExpenses } = stats;
+  const { monthDeals, totalCommission, totalCollected, totalAgentCommission, totalOfficeCommission, totalPaidToAgent, pendingExpenses, totalMonthExpenses } = stats;
 
   const monthlyChart = useMemo(() => {
     return Array.from({ length: 6 }, (_, i) => {
@@ -111,43 +117,79 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl">
-          <CardContent className="p-5">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-100 rounded-xl"><DollarSign className="w-5 h-5 text-purple-600" /></div>
-              <div>
-                <p className="text-xs text-muted-foreground">סה"כ עמלות</p>
-                <p className="text-2xl font-bold">{formatCurrency(isAdminView ? totalCommission : totalAgentCommission)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl">
-          <CardContent className="p-5">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-emerald-100 rounded-xl"><TrendingUp className="w-5 h-5 text-emerald-600" /></div>
-              <div>
-                <p className="text-xs text-muted-foreground">{isAdminView ? 'נגבה' : 'יתרה לתשלום'}</p>
-                <p className="text-2xl font-bold">{formatCurrency(isAdminView ? totalCollected : Math.max(0, totalAgentCommission - totalPaidToAgent))}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl">
-          <CardContent className="p-5">
-            <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-xl ${isAdminView && pendingExpenses > 0 ? 'bg-amber-100' : 'bg-blue-100'}`}>
-                <AlertCircle className={`w-5 h-5 ${isAdminView && pendingExpenses > 0 ? 'text-amber-600' : 'text-blue-600'}`} />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">{isAdminView ? 'ממתין לאישור' : 'סה"כ שולם'}</p>
-                <p className="text-2xl font-bold">{isAdminView ? pendingExpenses : formatCurrency(totalPaidToAgent)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {isAdminView ? (
+          <>
+            <Card className="rounded-2xl">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-emerald-100 rounded-xl"><Users className="w-5 h-5 text-emerald-600" /></div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">עמלות סוכן</p>
+                    <p className="text-2xl font-bold">{formatCurrency(totalAgentCommission)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="rounded-2xl">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-xl"><Building2 className="w-5 h-5 text-blue-600" /></div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">עמלות משרד</p>
+                    <p className="text-2xl font-bold">{formatCurrency(totalOfficeCommission)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="rounded-2xl">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-red-100 rounded-xl"><TrendingDown className="w-5 h-5 text-red-600" /></div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">סה"כ הוצאות</p>
+                    <p className="text-2xl font-bold">{formatCurrency(totalMonthExpenses)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        ) : (
+          <>
+            <Card className="rounded-2xl">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-purple-100 rounded-xl"><DollarSign className="w-5 h-5 text-purple-600" /></div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">סה"כ עמלות</p>
+                    <p className="text-2xl font-bold">{formatCurrency(totalAgentCommission)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="rounded-2xl">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-emerald-100 rounded-xl"><TrendingUp className="w-5 h-5 text-emerald-600" /></div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">יתרה לתשלום</p>
+                    <p className="text-2xl font-bold">{formatCurrency(Math.max(0, totalAgentCommission - totalPaidToAgent))}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="rounded-2xl">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-xl"><DollarSign className="w-5 h-5 text-blue-600" /></div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">סה"כ שולם</p>
+                    <p className="text-2xl font-bold">{formatCurrency(totalPaidToAgent)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
 
       {/* גרף עמלות חודשי */}
@@ -194,173 +236,234 @@ export default function Dashboard() {
       )}
 
       {/* Recent deals */}
-      <Card className="rounded-2xl">
-        <CardContent className="p-5 space-y-4">
-          <div className="flex items-center justify-between">
+      <Card className="rounded-2xl overflow-hidden">
+        <CardContent className="p-5 pb-2">
+          <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold">עסקאות אחרונות</h2>
             <Link to={dealsPath} className="text-sm text-primary hover:underline">כל העסקאות</Link>
           </div>
-          {deals.slice(0, 5).length === 0 ? (
-            <p className="text-center py-6 text-muted-foreground text-sm">אין עסקאות עדיין</p>
-          ) : (
-            <div className="space-y-2">
-              {deals.slice(0, 5).map(d => {
-                const st = DEAL_STATUS_MAP[d.status] || DEAL_STATUS_MAP['פתוחה'];
-                return (
-                  <div key={d.id} className="flex items-center justify-between py-2 border-b last:border-0">
-                    <div>
-                      <p className="font-medium text-sm">{d.client_name}</p>
-                      <p className="text-xs text-muted-foreground">{d.address || ''}{isAdminView && d.agent_name ? ` • ${d.agent_name}` : ''}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-sm">{formatCurrency(d.commission_amount)}</p>
-                      <Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </CardContent>
+        {deals.slice(0, 5).length === 0 ? (
+          <p className="text-center py-6 text-muted-foreground text-sm">אין עסקאות עדיין</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="text-right">תאריך</TableHead>
+                  <TableHead className="text-right">לקוח</TableHead>
+                  {isAdminView && <TableHead className="text-right">סוכן</TableHead>}
+                  <TableHead className="text-right">עמלה</TableHead>
+                  <TableHead className="text-right">עמלת סוכן</TableHead>
+                  {isAdminView && <TableHead className="text-right">עמלת משרד</TableHead>}
+                  <TableHead className="text-right">סטטוס</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {deals.slice(0, 5).map(d => {
+                  const st = DEAL_STATUS_MAP[d.status] || DEAL_STATUS_MAP['פתוחה'];
+                  return (
+                    <TableRow key={d.id}>
+                      <TableCell className="text-sm">{d.month || '-'}</TableCell>
+                      <TableCell className="font-medium text-sm">
+                        {d.client_name}
+                        {d.address ? <span className="block text-xs text-muted-foreground">{d.address}</span> : null}
+                      </TableCell>
+                      {isAdminView && <TableCell className="text-sm">{d.agent_name || '-'}</TableCell>}
+                      <TableCell className="text-sm font-semibold">{formatCurrency(d.commission_amount)}</TableCell>
+                      <TableCell className="text-sm text-emerald-700">{formatCurrency(d.agent_commission)}</TableCell>
+                      {isAdminView && <TableCell className="text-sm text-primary font-medium">{formatCurrency(d.office_commission)}</TableCell>}
+                      <TableCell><Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge></TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </Card>
 
       {/* Agent: הכנסות אחרונות */}
       {!isAdminView && deals.length > 0 && (
-        <Card className="rounded-2xl">
-          <CardContent className="p-5 space-y-4">
-            <div className="flex items-center justify-between">
+        <Card className="rounded-2xl overflow-hidden">
+          <CardContent className="p-5 pb-2">
+            <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold">הכנסות אחרונות</h2>
               <Link to={reportsPath} className="text-sm text-primary hover:underline">כל ההכנסות</Link>
             </div>
-            <div className="space-y-2">
-              {deals.slice(0, 5).map(d => {
-                const st = DEAL_STATUS_MAP[d.status] || DEAL_STATUS_MAP['פתוחה'];
-                return (
-                  <div key={d.id} className="flex items-center justify-between py-2 border-b last:border-0">
-                    <div>
-                      <p className="font-medium text-sm">{d.client_name}</p>
-                      <p className="text-xs text-muted-foreground">{d.address || ''} • {d.month}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-sm text-emerald-700">{formatCurrency(d.agent_commission)}</p>
-                      <Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
           </CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="text-right">חודש</TableHead>
+                  <TableHead className="text-right">לקוח</TableHead>
+                  <TableHead className="text-right">סכום עסקה</TableHead>
+                  <TableHead className="text-right">עמלה</TableHead>
+                  <TableHead className="text-right">עמלת סוכן</TableHead>
+                  <TableHead className="text-right">סטטוס</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {deals.slice(0, 5).map(d => {
+                  const st = DEAL_STATUS_MAP[d.status] || DEAL_STATUS_MAP['פתוחה'];
+                  return (
+                    <TableRow key={d.id}>
+                      <TableCell className="text-sm">{d.month || '-'}</TableCell>
+                      <TableCell className="font-medium text-sm">{d.client_name}</TableCell>
+                      <TableCell className="text-sm">{formatCurrency(d.deal_amount)}</TableCell>
+                      <TableCell className="text-sm font-semibold">{formatCurrency(d.commission_amount)}</TableCell>
+                      <TableCell className="text-sm text-emerald-700">{formatCurrency(d.agent_commission)}</TableCell>
+                      <TableCell><Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge></TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         </Card>
       )}
 
       {/* Agent: הוצאות אחרונות */}
       {!isAdminView && (
-        <Card className="rounded-2xl">
-          <CardContent className="p-5 space-y-4">
-            <div className="flex items-center justify-between">
+        <Card className="rounded-2xl overflow-hidden">
+          <CardContent className="p-5 pb-2">
+            <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold">הוצאות אחרונות</h2>
               <Link to={expensesPath} className="text-sm text-primary hover:underline">כל ההוצאות</Link>
             </div>
-            {expenses.slice(0, 5).length === 0 ? (
-              <p className="text-center py-4 text-muted-foreground text-sm">אין הוצאות עדיין</p>
-            ) : (
-              <div className="space-y-2">
-                {expenses.slice(0, 5).map(e => (
-                  <div key={e.id} className="flex items-center justify-between py-2 border-b last:border-0">
-                    <div>
-                      <p className="font-medium text-sm">{e.vendor_name}</p>
-                      <p className="text-xs text-muted-foreground">{e.category || ''} • {e.date}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-sm">{formatCurrency(e.total_amount)}</p>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        e.status === 'pending_approval' ? 'bg-amber-100 text-amber-700' :
-                        e.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
-                        e.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                        'bg-gray-100 text-gray-600'
-                      }`}>
-                        {e.status === 'pending_approval' ? 'ממתינה לאישור' :
-                         e.status === 'approved' ? 'מאושרת' :
-                         e.status === 'rejected' ? 'נדחתה' : e.status}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </CardContent>
+          {expenses.filter(e => e.status !== 'gmail_inbox').slice(0, 5).length === 0 ? (
+            <p className="text-center py-4 text-muted-foreground text-sm">אין הוצאות עדיין</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="text-right">ספק</TableHead>
+                    <TableHead className="text-right">תאריך</TableHead>
+                    <TableHead className="text-right">סכום</TableHead>
+                    <TableHead className="text-right">קטגוריה</TableHead>
+                    <TableHead className="text-right">סטטוס</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {expenses.filter(e => e.status !== 'gmail_inbox').slice(0, 5).map(e => {
+                    const st = STATUS_MAP[e.status] || STATUS_MAP.pending_approval;
+                    return (
+                      <TableRow key={e.id}>
+                        <TableCell className="font-medium text-sm">{e.vendor_name || '-'}</TableCell>
+                        <TableCell className="text-sm">{e.date ? format(new Date(e.date), 'dd/MM/yyyy') : '-'}</TableCell>
+                        <TableCell className="font-semibold text-sm">{formatCurrency(e.total_amount)}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{e.category || '-'}</TableCell>
+                        <TableCell><Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge></TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </Card>
       )}
 
       {/* Admin: הכנסות אחרונות */}
       {isAdminView && (
-        <Card className="rounded-2xl">
-          <CardContent className="p-5 space-y-4">
-            <div className="flex items-center justify-between">
+        <Card className="rounded-2xl overflow-hidden">
+          <CardContent className="p-5 pb-2">
+            <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold">הכנסות אחרונות</h2>
-              <Link to={dealsPath} className="text-sm text-primary hover:underline">כל ההכנסות</Link>
+              <Link to={reportsPath} className="text-sm text-primary hover:underline">כל ההכנסות</Link>
             </div>
-            {allDeals.slice(0, 5).length === 0 ? (
-              <p className="text-center py-4 text-muted-foreground text-sm">אין עסקאות עדיין</p>
-            ) : (
-              <div className="space-y-2">
-                {allDeals.slice(0, 5).map(d => {
-                  const st = DEAL_STATUS_MAP[d.status] || DEAL_STATUS_MAP['פתוחה'];
-                  return (
-                    <div key={d.id} className="flex items-center justify-between py-2 border-b last:border-0">
-                      <div>
-                        <p className="font-medium text-sm">{d.client_name}</p>
-                        <p className="text-xs text-muted-foreground">{d.address || ''}{d.agent_name ? ` • ${d.agent_name}` : ''}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-sm text-emerald-700">{formatCurrency(d.commission_amount)}</p>
-                        <Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </CardContent>
+          {allDeals.slice(0, 5).length === 0 ? (
+            <p className="text-center py-4 text-muted-foreground text-sm">אין עסקאות עדיין</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="text-right">חודש</TableHead>
+                    <TableHead className="text-right">לקוח</TableHead>
+                    <TableHead className="text-right">סוכן</TableHead>
+                    <TableHead className="text-right">סכום עסקה</TableHead>
+                    <TableHead className="text-right">עמלה</TableHead>
+                    <TableHead className="text-right">עמלת סוכן</TableHead>
+                    <TableHead className="text-right">עמלת משרד</TableHead>
+                    <TableHead className="text-right">סטטוס</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {allDeals.slice(0, 5).map(d => {
+                    const st = DEAL_STATUS_MAP[d.status] || DEAL_STATUS_MAP['פתוחה'];
+                    return (
+                      <TableRow key={d.id}>
+                        <TableCell className="text-sm">{d.month || '-'}</TableCell>
+                        <TableCell className="font-medium text-sm">{d.client_name}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{d.agent_name || '-'}</TableCell>
+                        <TableCell className="text-sm">{formatCurrency(d.deal_amount)}</TableCell>
+                        <TableCell className="text-sm font-semibold">{formatCurrency(d.commission_amount)}</TableCell>
+                        <TableCell className="text-sm text-emerald-700">{formatCurrency(d.agent_commission)}</TableCell>
+                        <TableCell className="text-sm text-primary font-medium">{formatCurrency(d.office_commission)}</TableCell>
+                        <TableCell><Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge></TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </Card>
       )}
 
       {/* Admin: הוצאות אחרונות */}
       {isAdminView && (
-        <Card className="rounded-2xl">
-          <CardContent className="p-5 space-y-4">
-            <div className="flex items-center justify-between">
+        <Card className="rounded-2xl overflow-hidden">
+          <CardContent className="p-5 pb-2">
+            <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold">הוצאות אחרונות</h2>
               <Link to={expensesPath} className="text-sm text-primary hover:underline">כל ההוצאות</Link>
             </div>
-            {allExpenses.slice(0, 5).length === 0 ? (
-              <p className="text-center py-4 text-muted-foreground text-sm">אין הוצאות עדיין</p>
-            ) : (
-              <div className="space-y-2">
-                {allExpenses.slice(0, 5).map(e => (
-                  <div key={e.id} className="flex items-center justify-between py-2 border-b last:border-0">
-                    <div>
-                      <p className="font-medium text-sm">{e.vendor_name}</p>
-                      <p className="text-xs text-muted-foreground">{e.category || ''} • {e.date}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-sm">{formatCurrency(e.total_amount)}</p>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        e.status === 'pending_approval' ? 'bg-amber-100 text-amber-700' :
-                        e.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
-                        e.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                        'bg-gray-100 text-gray-600'
-                      }`}>
-                        {e.status === 'pending_approval' ? 'ממתינה לאישור' :
-                         e.status === 'approved' ? 'מאושרת' :
-                         e.status === 'rejected' ? 'נדחתה' : e.status}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </CardContent>
+          {regularExpenses.slice(0, 5).length === 0 ? (
+            <p className="text-center py-4 text-muted-foreground text-sm">אין הוצאות עדיין</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="text-right">ספק</TableHead>
+                    <TableHead className="text-right">תאריך</TableHead>
+                    <TableHead className="text-right">סכום</TableHead>
+                    <TableHead className="text-right">קטגוריה</TableHead>
+                    <TableHead className="text-right">סוכן</TableHead>
+                    <TableHead className="text-right">סטטוס</TableHead>
+                    <TableHead className="text-right">קבלה</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {regularExpenses.slice(0, 5).map(e => {
+                    const st = STATUS_MAP[e.status] || STATUS_MAP.pending_approval;
+                    return (
+                      <TableRow key={e.id}>
+                        <TableCell className="font-medium text-sm">{e.vendor_name || '-'}</TableCell>
+                        <TableCell className="text-sm">{e.date ? format(new Date(e.date), 'dd/MM/yyyy') : '-'}</TableCell>
+                        <TableCell className="font-semibold text-sm">{formatCurrency(e.total_amount)}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{e.category || '-'}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{e.agent_name || '-'}</TableCell>
+                        <TableCell><Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge></TableCell>
+                        <TableCell>
+                          {e.has_receipt
+                            ? <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 text-xs">יש</Badge>
+                            : <Badge variant="secondary" className="bg-red-100 text-red-700 text-xs">חסרה</Badge>}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </Card>
       )}
     </div>
