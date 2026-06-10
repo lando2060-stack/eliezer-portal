@@ -54,7 +54,7 @@ export default function Agents() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, phone, role, is_approved')
+        .select('id, full_name, email, phone, role, is_approved')
         .eq('is_approved', false)
         .eq('role', 'agent');
       if (error) throw error;
@@ -81,7 +81,13 @@ export default function Agents() {
   });
 
   const toggleActive = useMutation({
-    mutationFn: ({ id, is_active }) => base44.entities.Agent.update(id, { is_active }),
+    mutationFn: async ({ id, is_active, user_id }) => {
+      await base44.entities.Agent.update(id, { is_active });
+      if (user_id) {
+        const { error } = await supabase.from('profiles').update({ is_approved: is_active }).eq('id', user_id);
+        if (error) throw error;
+      }
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agents'] }),
     onError: () => toast.error('שגיאה בעדכון הסטטוס'),
   });
@@ -90,6 +96,22 @@ export default function Agents() {
     mutationFn: async (profile) => {
       const { error } = await supabase.from('profiles').update({ is_approved: true }).eq('id', profile.id);
       if (error) throw error;
+
+      // link or create agent record automatically
+      const existing = agents.find(a => a.email === profile.email);
+      if (existing) {
+        await base44.entities.Agent.update(existing.id, { user_id: profile.id, is_active: true });
+      } else {
+        await base44.entities.Agent.create({
+          name: profile.full_name || '',
+          email: profile.email || '',
+          phone: profile.phone || '',
+          commission_percent: 50,
+          is_active: true,
+          user_id: profile.id,
+        });
+      }
+
       try {
         await fetch('/api/send-email', {
           method: 'POST',
@@ -100,6 +122,7 @@ export default function Agents() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pending-profiles'] });
+      queryClient.invalidateQueries({ queryKey: ['agents'] });
       toast.success('הסוכן אושר בהצלחה');
     },
     onError: () => toast.error('שגיאה באישור הסוכן'),
@@ -196,7 +219,7 @@ export default function Agents() {
                 <TableCell>
                   <Switch
                     checked={agent.is_active}
-                    onCheckedChange={v => toggleActive.mutate({ id: agent.id, is_active: v })}
+                    onCheckedChange={v => toggleActive.mutate({ id: agent.id, is_active: v, user_id: agent.user_id })}
                   />
                 </TableCell>
                 <TableCell>
@@ -227,15 +250,9 @@ export default function Agents() {
               <div className="space-y-1"><Label className="text-xs">טלפון</Label><Input value={form.phone} onChange={e => upd('phone', e.target.value)} /></div>
               <div className="space-y-1"><Label className="text-xs">מייל</Label><Input type="email" value={form.email} onChange={e => upd('email', e.target.value)} /></div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">אחוז עמלה (%)</Label>
-                <Input type="number" value={form.commission_percent} onChange={e => upd('commission_percent', parseFloat(e.target.value))} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">מזהה משתמש (user_id)</Label>
-                <Input value={form.user_id} onChange={e => upd('user_id', e.target.value)} placeholder="אופציונלי" />
-              </div>
+            <div className="space-y-1">
+              <Label className="text-xs">אחוז עמלה (%)</Label>
+              <Input type="number" value={form.commission_percent} onChange={e => upd('commission_percent', parseFloat(e.target.value))} />
             </div>
             <div className="flex items-center gap-3">
               <Switch checked={form.is_active} onCheckedChange={v => upd('is_active', v)} />
