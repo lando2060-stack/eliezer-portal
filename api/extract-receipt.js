@@ -12,9 +12,16 @@ export default async function handler(req, res) {
     try {
       const upstream = await fetch(url);
       if (!upstream.ok) return res.status(upstream.status).end();
-      const ct = upstream.headers.get('content-type') || 'application/octet-stream';
       const buf = await upstream.arrayBuffer();
+      let ct = upstream.headers.get('content-type') || 'application/octet-stream';
+      // Detect PDF from magic bytes when Supabase returns a generic content-type
+      if (ct === 'application/octet-stream' || ct === 'binary/octet-stream') {
+        if (Buffer.from(buf.slice(0, 5)).toString('ascii').startsWith('%PDF')) {
+          ct = 'application/pdf';
+        }
+      }
       res.setHeader('Content-Type', ct);
+      res.setHeader('Content-Disposition', 'inline');
       res.setHeader('Cache-Control', 'public, max-age=86400');
       return res.send(Buffer.from(buf));
     } catch (err) { return res.status(500).json({ error: err.message }); }

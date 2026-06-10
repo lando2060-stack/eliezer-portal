@@ -100,13 +100,30 @@ export default function ReceiptReviewDialog({
     }
   }, [open]);
 
-  // Render first page of a local PDF to JPEG for inline image preview
+  // Render first page of a PDF to JPEG for inline preview.
+  // For local PDFs: uses blob URL directly.
+  // For remote PDFs / extension-less files (e.g. UUID uploads): fetches via proxy then renders.
   useEffect(() => {
-    if (!file || file.type !== 'application/pdf' || !previewUrl) { setPdfPageImage(null); return; }
+    setPdfPageImage(null);
+
+    const rawUrl = previewUrl || fileUrl || initialReceiptUrl || '';
+    const toProxy = (u) =>
+      u && !u.startsWith('blob:') && !u.startsWith('data:') && u.includes('supabase.co')
+        ? `/api/extract-receipt?url=${encodeURIComponent(u)}`
+        : u;
+    const localPdf = file?.type === 'application/pdf' || file?.name?.toLowerCase().endsWith('.pdf');
+    const remoteNeedsRender = !file && rawUrl && !/\.(jpg|jpeg|png|webp|gif|heic)(\?|$)/i.test(rawUrl);
+
+    const urlToRender = file
+      ? (localPdf ? previewUrl : null)
+      : (remoteNeedsRender ? toProxy(rawUrl) : null);
+
+    if (!urlToRender) return;
+
     let cancelled = false;
     (async () => {
       try {
-        const pdf = await pdfjsLib.getDocument(previewUrl).promise;
+        const pdf = await pdfjsLib.getDocument(urlToRender).promise;
         const page = await pdf.getPage(1);
         const viewport = page.getViewport({ scale: 2 });
         const canvas = document.createElement('canvas');
@@ -117,7 +134,7 @@ export default function ReceiptReviewDialog({
       } catch { if (!cancelled) setPdfPageImage(null); }
     })();
     return () => { cancelled = true; };
-  }, [file, previewUrl]);
+  }, [file, previewUrl, fileUrl, initialReceiptUrl]);
 
   const runExtraction = async (url) => {
     setStep('processing');
