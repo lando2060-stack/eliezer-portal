@@ -1,9 +1,25 @@
 /**
- * POST /api/extract-receipt
- * Body: { file_url: string, json_schema?: object }
- * Uses Claude claude-haiku-4-5 — supports images and PDFs natively via base64.
+ * GET  /api/extract-receipt?url=ENCODED_SUPABASE_URL  — proxy file (bypasses NetFree CDN block)
+ * POST /api/extract-receipt  Body: { file_url, json_schema? } — AI extraction via Claude
  */
+const SUPABASE_STORAGE_PREFIX = 'https://wdvbdsicslavrscojwcw.supabase.co/storage/';
+
 export default async function handler(req, res) {
+  // ── GET: proxy a Supabase storage file ──────────────────────────────────────
+  if (req.method === 'GET') {
+    const url = decodeURIComponent(req.query.url || '');
+    if (!url.startsWith(SUPABASE_STORAGE_PREFIX)) return res.status(403).end();
+    try {
+      const upstream = await fetch(url);
+      if (!upstream.ok) return res.status(upstream.status).end();
+      const ct = upstream.headers.get('content-type') || 'application/octet-stream';
+      const buf = await upstream.arrayBuffer();
+      res.setHeader('Content-Type', ct);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.send(Buffer.from(buf));
+    } catch (err) { return res.status(500).json({ error: err.message }); }
+  }
+
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { file_url, json_schema } = req.body ?? {};

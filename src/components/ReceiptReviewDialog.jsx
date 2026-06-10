@@ -286,7 +286,7 @@ export default function ReceiptReviewDialog({
   // Route remote Supabase URLs through our proxy to bypass NetFree CDN blocking
   const toProxyUrl = (u) =>
     u && !u.startsWith('blob:') && !u.startsWith('data:') && u.includes('supabase.co')
-      ? `/api/proxy-file?url=${encodeURIComponent(u)}`
+      ? `/api/extract-receipt?url=${encodeURIComponent(u)}`
       : u;
   const displayUrl = file ? rawUrl : toProxyUrl(rawUrl);
 
