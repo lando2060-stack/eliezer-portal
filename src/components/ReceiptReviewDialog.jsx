@@ -68,6 +68,7 @@ export default function ReceiptReviewDialog({
   const [extractionError, setExtractionError] = useState('');
   const [imgFailed, setImgFailed] = useState(false);
   const [pdfPageImage, setPdfPageImage] = useState(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const queryClient = useQueryClient();
@@ -97,14 +98,16 @@ export default function ReceiptReviewDialog({
       setExtractionError('');
       setImgFailed(false);
       setPdfPageImage(null);
+      setPdfLoading(false);
     }
   }, [open]);
 
   // Render first page of a PDF to JPEG for inline preview.
-  // For local PDFs: uses blob URL directly.
-  // For remote PDFs / extension-less files (e.g. UUID uploads): fetches via proxy then renders.
+  // Fetches bytes manually (via proxy for remote files) then passes raw data to PDF.js.
+  // This avoids PDF.js's own HTTP layer and Chrome's compact iframe PDF view.
   useEffect(() => {
     setPdfPageImage(null);
+    setPdfLoading(false);
 
     const rawUrl = previewUrl || fileUrl || initialReceiptUrl || '';
     const toProxy = (u) =>
@@ -121,17 +124,28 @@ export default function ReceiptReviewDialog({
     if (!urlToRender) return;
 
     let cancelled = false;
+    setPdfLoading(true);
     (async () => {
       try {
-        const pdf = await pdfjsLib.getDocument(urlToRender).promise;
+        // Fetch bytes manually — avoids PDF.js's own HTTP client and Chrome plugin issues
+        const res = await fetch(urlToRender);
+        if (!res.ok) throw new Error(`fetch ${res.status}`);
+        const arrayBuf = await res.arrayBuffer();
+
+        // Confirm it's actually a PDF via magic bytes
+        const magic = new Uint8Array(arrayBuf.slice(0, 5));
+        const magicStr = String.fromCharCode(...magic);
+        if (!magicStr.startsWith('%PDF')) throw new Error('not a PDF');
+
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
         const page = await pdf.getPage(1);
         const viewport = page.getViewport({ scale: 2 });
         const canvas = document.createElement('canvas');
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-        if (!cancelled) setPdfPageImage(canvas.toDataURL('image/jpeg', 0.88));
-      } catch { if (!cancelled) setPdfPageImage(null); }
+        if (!cancelled) { setPdfPageImage(canvas.toDataURL('image/jpeg', 0.88)); setPdfLoading(false); }
+      } catch { if (!cancelled) { setPdfPageImage(null); setPdfLoading(false); } }
     })();
     return () => { cancelled = true; };
   }, [file, previewUrl, fileUrl, initialReceiptUrl]);
@@ -421,20 +435,26 @@ export default function ReceiptReviewDialog({
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium text-muted-foreground">תצוגת קבלה</p>
                     <div className="flex gap-1">
-                      {(!useIframe || pdfPageImage) && (
+                      {pdfPageImage && (
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setRotation(r => r + 90)}>
                           <RotateCw className="w-4 h-4" />
                         </Button>
                       )}
-                      <a href={fileUrl || initialReceiptUrl} target="_blank" rel="noopener noreferrer">
+                      <a href={displayUrl} target="_blank" rel="noopener noreferrer">
                         <Button variant="ghost" size="icon" className="h-8 w-8" title="פתח בחלון חדש">
                           <ExternalLink className="w-4 h-4" />
                         </Button>
                       </a>
                     </div>
                   </div>
-                  {pdfPageImage ? (
-                    /* Local PDF rendered to image — supports rotation */
+                  {pdfLoading ? (
+                    <div className="bg-muted rounded-xl flex items-center justify-center" style={{ height: 520 }}>
+                      <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                        <Loader2 className="w-8 h-8 animate-spin" />
+                        <p className="text-sm">טוען קבלה...</p>
+                      </div>
+                    </div>
+                  ) : pdfPageImage ? (
                     <div className="bg-muted rounded-xl overflow-hidden flex items-center justify-center min-h-[300px] max-h-[520px]">
                       <img
                         src={pdfPageImage}
