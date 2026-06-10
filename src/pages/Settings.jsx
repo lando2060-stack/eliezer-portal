@@ -132,98 +132,6 @@ function ProfileTab() {
   );
 }
 
-// ---- Recurring Tab ----
-function RecurringTab() {
-  const queryClient = useQueryClient();
-  const { data: recurring = [] } = useQuery({ queryKey: ['recurring'], queryFn: () => base44.entities.RecurringExpense.list() });
-  const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: () => base44.entities.Category.list() });
-
-  const empty = { name: '', vendor_name: '', amount: '', category: '', payment_method: '', day_of_month: 1, is_active: true };
-  const [newR, setNewR] = useState(empty);
-  const [dialogOpen, setDialogOpen] = useState(false);
-
-  const createR = useMutation({
-    mutationFn: (d) => base44.entities.RecurringExpense.create({ ...d, amount: parseFloat(d.amount) || 0 }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['recurring'] }); toast.success('נוצרה הוצאה קבועה'); setNewR(empty); setDialogOpen(false); },
-    onError: () => toast.error('שגיאה ביצירת הוצאה קבועה'),
-  });
-  const deleteR = useMutation({
-    mutationFn: (id) => base44.entities.RecurringExpense.delete(id),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['recurring'] }); toast.success('נמחקה'); },
-    onError: () => toast.error('שגיאה במחיקה'),
-  });
-  const toggleR = useMutation({
-    mutationFn: ({ id, is_active }) => base44.entities.RecurringExpense.update(id, { is_active }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['recurring'] }),
-    onError: () => toast.error('שגיאה בעדכון הסטטוס'),
-  });
-
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button onClick={() => setDialogOpen(true)} className="gap-2 rounded-xl"><Plus className="w-4 h-4" /> הוצאה קבועה חדשה</Button>
-      </div>
-
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>הוספת הוצאה קבועה</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1"><Label className="text-xs">שם *</Label><Input value={newR.name} onChange={e => setNewR(p => ({ ...p, name: e.target.value }))} className="rounded-xl" /></div>
-            <div className="space-y-1"><Label className="text-xs">ספק</Label><Input value={newR.vendor_name} onChange={e => setNewR(p => ({ ...p, vendor_name: e.target.value }))} className="rounded-xl" /></div>
-            <div className="space-y-1"><Label className="text-xs">סכום *</Label><Input type="number" value={newR.amount} onChange={e => setNewR(p => ({ ...p, amount: e.target.value }))} className="rounded-xl" /></div>
-            <div className="space-y-1">
-              <Label className="text-xs">קטגוריה</Label>
-              <Select value={newR.category} onValueChange={v => setNewR(p => ({ ...p, category: v }))}>
-                <SelectTrigger className="rounded-xl"><SelectValue placeholder="בחר" /></SelectTrigger>
-                <SelectContent>{categories.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">אמצעי תשלום</Label>
-              <Select value={newR.payment_method} onValueChange={v => setNewR(p => ({ ...p, payment_method: v }))}>
-                <SelectTrigger className="rounded-xl"><SelectValue placeholder="בחר" /></SelectTrigger>
-                <SelectContent>{Object.entries(PAYMENT_METHODS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1"><Label className="text-xs">יום בחודש</Label><Input type="number" min="1" max="31" value={newR.day_of_month} onChange={e => setNewR(p => ({ ...p, day_of_month: parseInt(e.target.value) || 1 }))} className="rounded-xl" /></div>
-            <Button onClick={() => createR.mutate(newR)} disabled={!newR.name || !newR.amount || createR.isPending} className="w-full gap-2 rounded-xl"><Plus className="w-4 h-4" /> הוסף</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-      <Card className="rounded-2xl overflow-hidden">
-        <Table>
-          <TableHeader><TableRow className="bg-muted/50">
-            <TableHead className="text-right">שם</TableHead>
-            <TableHead className="text-right">ספק</TableHead>
-            <TableHead className="text-right">סכום</TableHead>
-            <TableHead className="text-right">קטגוריה</TableHead>
-            <TableHead className="text-right">יום</TableHead>
-            <TableHead className="text-right">סטטוס</TableHead>
-            <TableHead className="text-right w-12"></TableHead>
-          </TableRow></TableHeader>
-          <TableBody>
-            {recurring.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">אין הוצאות קבועות</TableCell></TableRow>
-            ) : recurring.map(r => (
-              <TableRow key={r.id}>
-                <TableCell className="font-medium">{r.name}</TableCell>
-                <TableCell>{r.vendor_name || '-'}</TableCell>
-                <TableCell>₪{r.amount?.toLocaleString()}</TableCell>
-                <TableCell>{r.category || '-'}</TableCell>
-                <TableCell>{r.day_of_month}</TableCell>
-                <TableCell><Switch checked={r.is_active} onCheckedChange={v => toggleR.mutate({ id: r.id, is_active: v })} /></TableCell>
-                <TableCell>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => { if (window.confirm(`למחוק את "${r.name}"? פעולה זו אינה ניתנת לביטול.`)) deleteR.mutate(r.id); }}><Trash2 className="w-4 h-4" /></Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Card>
-    </div>
-  );
-}
-
 // ---- Vendors Tab ----
 function VendorsTab() {
   const queryClient = useQueryClient();
@@ -424,6 +332,20 @@ function AreasSettingsTab() {
   );
 }
 
+// ---- Catalog Tab (Categories + Areas combined) ----
+function CatalogTab() {
+  const [activeTab, setActiveTab] = useState('categories');
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2 border-b pb-2">
+        <button onClick={() => setActiveTab('categories')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'categories' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>קטגוריות</button>
+        <button onClick={() => setActiveTab('areas')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'areas' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>אזורים</button>
+      </div>
+      {activeTab === 'categories' ? <CategoriesTab /> : <AreasSettingsTab />}
+    </div>
+  );
+}
+
 // ---- Integrations Tab ----
 function IntegrationsTab() {
   const [googleStatus, setGoogleStatus] = useState(null);
@@ -519,47 +441,6 @@ function IntegrationsTab() {
       <p className="text-sm text-muted-foreground">
         חבר את חשבון Google שלך כדי לשמור קבלות ב-Drive ולסרוק קבלות שמגיעות למייל.
       </p>
-
-      {/* OpenAI Status */}
-      <Card className="rounded-2xl">
-        <CardContent className="p-5">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center">
-                <svg className="w-6 h-6 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                </svg>
-              </div>
-              <div>
-                <div className="font-semibold flex items-center gap-2">
-                  Claude AI (סריקת קבלות)
-                  {openaiStatus === null ? (
-                    <Badge variant="outline" className="text-xs text-muted-foreground">בודק...</Badge>
-                  ) : openaiStatus.connected ? (
-                    <Badge className="text-xs bg-emerald-100 text-emerald-700 border-emerald-200">מחובר</Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-xs bg-red-50 text-red-600 border-red-200">לא מחובר</Badge>
-                  )}
-                </div>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  {openaiStatus?.connected
-                    ? 'חילוץ נתונים מקבלות ותמונות פעיל'
-                    : openaiStatus?.reason
-                    ? openaiStatus.reason
-                    : 'נדרש ANTHROPIC_API_KEY בהגדרות Vercel'}
-                </p>
-              </div>
-            </div>
-            {!openaiStatus?.connected && openaiStatus !== null && (
-              <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer">
-                <Button variant="outline" size="sm" className="rounded-xl gap-1.5 flex-shrink-0">
-                  <ExternalLink className="w-3.5 h-3.5" /> קבל מפתח Claude
-                </Button>
-              </a>
-            )}
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Drive Mode (admin) */}
       {googleStatus?.connected && (
@@ -687,10 +568,21 @@ function IntegrationsTab() {
 }
 
 // ---- Agent Permissions Tab (admin only) ----
+const AGENT_PERMISSION_DEFS = [
+  { key: 'can_upload_drive', label: 'העלאה לדרייב האישי', desc: 'יכול להעלות קבלות לדרייב שלו' },
+  { key: 'can_connect_email', label: 'חיבור מייל אישי', desc: 'יכול לחבר את ה-Gmail שלו' },
+  { key: 'can_add_deal', label: 'הוספת עסקה', desc: 'יכול לפתוח עסקה חדשה' },
+  { key: 'can_add_expense', label: 'הוספת הוצאה', desc: 'יכול להוסיף הוצאה' },
+  { key: 'can_add_income', label: 'הוספת הכנסה', desc: 'יכול לרשום הכנסה' },
+];
+const PERM_DEFAULTS = { can_upload_drive: true, can_connect_email: true, can_add_deal: true, can_add_expense: true, can_add_income: true };
+
 function AgentPermissionsTab() {
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState('pending');
 
-  const { data: pending = [], isLoading } = useQuery({
+  // ── Pending approvals ──
+  const { data: pending = [], isLoading: loadingPending } = useQuery({
     queryKey: ['pending-profiles'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -719,46 +611,208 @@ function AgentPermissionsTab() {
     onError: () => toast.error('שגיאה באישור הסוכן'),
   });
 
-  if (isLoading) return <div className="text-center py-12 text-muted-foreground">טוען...</div>;
+  // ── Add admin ──
+  const { data: agentProfiles = [], isLoading: loadingAgentProfiles } = useQuery({
+    queryKey: ['agent-profiles'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, phone, role, is_approved')
+        .eq('role', 'agent')
+        .eq('is_approved', true);
+      if (error) throw error;
+      return data || [];
+    },
+  });
 
-  if (pending.length === 0) {
-    return (
-      <div className="text-center py-16 text-muted-foreground">
-        <CheckCircle2 className="w-10 h-10 mx-auto mb-3 text-emerald-500" />
-        <p className="font-medium">אין סוכנים ממתינים לאישור</p>
-      </div>
-    );
-  }
+  const promoteAdminMutation = useMutation({
+    mutationFn: async (profileId) => {
+      const { error } = await supabase.from('profiles').update({ role: 'admin' }).eq('id', profileId);
+      if (error) throw error;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['agent-profiles'] }); toast.success('הסוכן הפך למנהל'); },
+    onError: () => toast.error('שגיאה בשינוי הרשאה'),
+  });
+
+  const demoteMutation = useMutation({
+    mutationFn: async (profileId) => {
+      const { error } = await supabase.from('profiles').update({ role: 'agent' }).eq('id', profileId);
+      if (error) throw error;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['agent-profiles'] }); toast.success('ההרשאה שונתה לסוכן'); },
+    onError: () => toast.error('שגיאה בשינוי הרשאה'),
+  });
+
+  // ── Agent permissions ──
+  const { data: agents = [], isLoading: loadingAgents } = useQuery({
+    queryKey: ['agents'],
+    queryFn: () => base44.entities.Agent.list(),
+  });
+
+  const updatePermMutation = useMutation({
+    mutationFn: ({ id, permissions }) => base44.entities.Agent.update(id, { permissions }),
+    onMutate: async ({ id, permissions }) => {
+      await queryClient.cancelQueries({ queryKey: ['agents'] });
+      const previousAgents = queryClient.getQueryData(['agents']);
+      queryClient.setQueryData(['agents'], (old) =>
+        old?.map(a => a.id === id ? { ...a, permissions } : a) ?? []
+      );
+      return { previousAgents };
+    },
+    onError: (err, variables, context) => {
+      queryClient.setQueryData(['agents'], context.previousAgents);
+      toast.error('שגיאה בשמירת ההרשאה');
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['agents'] }),
+  });
+
+  const togglePerm = (agent, key) => {
+    const current = { ...PERM_DEFAULTS, ...(agent.permissions || {}) };
+    updatePermMutation.mutate({ id: agent.id, permissions: { ...current, [key]: !current[key] } });
+  };
+
+  const tabs = [
+    { key: 'pending', label: 'ממתינים לאישור', badge: pending.length },
+    { key: 'admins', label: 'הוספת מנהל' },
+    { key: 'perms', label: 'הרשאות סוכנים' },
+  ];
 
   return (
-    <div className="space-y-3 max-w-xl">
-      <p className="text-sm text-muted-foreground flex items-center gap-2">
-        <Clock className="w-4 h-4 text-amber-500" />
-        {pending.length} סוכנים ממתינים לאישור גישה
-      </p>
-      {pending.map(p => (
-        <Card key={p.id} className="rounded-2xl border-amber-200 bg-amber-50/50">
-          <CardContent className="p-4 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-100 rounded-xl">
-                <UserCheck className="w-5 h-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="font-semibold">{p.full_name || 'ללא שם'}</p>
-                <p className="text-sm text-muted-foreground">{p.phone || ''}</p>
-              </div>
-            </div>
-            <Button
-              size="sm"
-              className="gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700"
-              onClick={() => approveMutation.mutate(p)}
-              disabled={approveMutation.isPending}
-            >
-              <CheckCircle2 className="w-4 h-4" /> אשר גישה
-            </Button>
-          </CardContent>
-        </Card>
-      ))}
+    <div className="space-y-4 max-w-2xl">
+      {/* Sub-tabs */}
+      <div className="flex gap-2 border-b pb-2 flex-wrap">
+        {tabs.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setActiveTab(t.key)}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${activeTab === t.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            {t.label}
+            {t.badge > 0 && <span className="bg-amber-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none">{t.badge}</span>}
+          </button>
+        ))}
+      </div>
+
+      {/* Pending approvals */}
+      {activeTab === 'pending' && (
+        loadingPending ? <div className="text-center py-12 text-muted-foreground">טוען...</div>
+        : pending.length === 0 ? (
+          <div className="text-center py-16 text-muted-foreground">
+            <CheckCircle2 className="w-10 h-10 mx-auto mb-3 text-emerald-500" />
+            <p className="font-medium">אין סוכנים ממתינים לאישור</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              <Clock className="w-4 h-4 text-amber-500" />
+              {pending.length} סוכנים ממתינים לאישור גישה
+            </p>
+            {pending.map(p => (
+              <Card key={p.id} className="rounded-2xl border-amber-200 bg-amber-50/50">
+                <CardContent className="p-4 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-amber-100 rounded-xl"><UserCheck className="w-5 h-5 text-amber-600" /></div>
+                    <div>
+                      <p className="font-semibold">{p.full_name || 'ללא שם'}</p>
+                      <p className="text-sm text-muted-foreground">{p.phone || ''}</p>
+                    </div>
+                  </div>
+                  <Button size="sm" className="gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700"
+                    onClick={() => approveMutation.mutate(p)} disabled={approveMutation.isPending}>
+                    <CheckCircle2 className="w-4 h-4" /> אשר גישה
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )
+      )}
+
+      {/* Add / manage admins */}
+      {activeTab === 'admins' && (
+        loadingAgentProfiles ? <div className="text-center py-12 text-muted-foreground">טוען...</div>
+        : agentProfiles.length === 0 ? (
+          <div className="text-center py-16 text-muted-foreground">
+            <Shield className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
+            <p className="font-medium">אין סוכנים פעילים</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">הפוך סוכן למנהל — המנהל יקבל גישה מלאה למערכת</p>
+            {agentProfiles.map(p => (
+              <Card key={p.id} className="rounded-2xl">
+                <CardContent className="p-4 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-purple-100 rounded-xl"><Shield className="w-5 h-5 text-purple-600" /></div>
+                    <div>
+                      <p className="font-semibold">{p.full_name || 'ללא שם'}</p>
+                      <p className="text-xs text-muted-foreground">{p.phone || ''}</p>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 rounded-xl border-purple-300 text-purple-700 hover:bg-purple-50"
+                    onClick={() => {
+                      if (window.confirm(`להפוך את "${p.full_name}" למנהל? הוא יקבל גישה מלאה למערכת.`))
+                        promoteAdminMutation.mutate(p.id);
+                    }}
+                    disabled={promoteAdminMutation.isPending}
+                  >
+                    <Shield className="w-4 h-4" /> הפוך למנהל
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )
+      )}
+
+      {/* Agent permissions */}
+      {activeTab === 'perms' && (
+        loadingAgents ? <div className="text-center py-12 text-muted-foreground">טוען...</div>
+        : agents.filter(a => a.is_active).length === 0 ? (
+          <div className="text-center py-16 text-muted-foreground">
+            <p className="font-medium">אין סוכנים פעילים</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">הגדר מה כל סוכן יכול לעשות במערכת</p>
+            {agents.filter(a => a.is_active).map(agent => {
+              const perms = { ...PERM_DEFAULTS, ...(agent.permissions || {}) };
+              return (
+                <Card key={agent.id} className="rounded-2xl">
+                  <CardContent className="p-5 space-y-4">
+                    <div className="flex items-center gap-3 pb-2 border-b">
+                      <div className="w-9 h-9 bg-primary/10 rounded-xl flex items-center justify-center">
+                        <span className="font-bold text-primary text-sm">{agent.name?.[0] || '?'}</span>
+                      </div>
+                      <div>
+                        <p className="font-semibold">{agent.name}</p>
+                        <p className="text-xs text-muted-foreground">{agent.email || 'אין מייל'}</p>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      {AGENT_PERMISSION_DEFS.map(def => (
+                        <div key={def.key} className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-medium">{def.label}</p>
+                            <p className="text-xs text-muted-foreground">{def.desc}</p>
+                          </div>
+                          <Switch
+                            checked={perms[def.key]}
+                            onCheckedChange={() => togglePerm(agent, def.key)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )
+      )}
     </div>
   );
 }
@@ -774,15 +828,6 @@ const SETTINGS_SECTIONS = {
     iconColor: 'text-blue-500',
     adminOnly: false,
   },
-  recurring: {
-    key: 'recurring',
-    title: 'הוצאות קבועות',
-    desc: 'תוכנית, תאריך סיום, סיסמה',
-    icon: RefreshCw,
-    iconBg: 'bg-orange-50',
-    iconColor: 'text-orange-500',
-    adminOnly: false,
-  },
   integrations: {
     key: 'integrations',
     title: 'חיבורים',
@@ -792,19 +837,10 @@ const SETTINGS_SECTIONS = {
     iconColor: 'text-violet-500',
     adminOnly: false,
   },
-  areas: {
-    key: 'areas',
-    title: 'אזורים',
-    desc: 'הגדרות, אזורים, קדימות, מפה',
-    icon: MapPin,
-    iconBg: 'bg-emerald-50',
-    iconColor: 'text-emerald-500',
-    adminOnly: true,
-  },
-  categories: {
-    key: 'categories',
-    title: 'קטגוריות',
-    desc: 'כספים, מתפללים, אירועים',
+  catalog: {
+    key: 'catalog',
+    title: 'קטגוריות ואזורים',
+    desc: 'ניהול קטגוריות הוצאות ואזורי עסקאות',
     icon: Tag,
     iconBg: 'bg-amber-50',
     iconColor: 'text-amber-500',
@@ -853,10 +889,8 @@ export default function Settings() {
         </div>
 
         {activeSection === 'profile' && <ProfileTab />}
-        {activeSection === 'recurring' && <RecurringTab />}
         {activeSection === 'integrations' && <IntegrationsTab />}
-        {activeSection === 'areas' && admin && <AreasSettingsTab />}
-        {activeSection === 'categories' && admin && <CategoriesTab />}
+        {activeSection === 'catalog' && admin && <CatalogTab />}
         {activeSection === 'permissions' && admin && <AgentPermissionsTab />}
       </div>
     );

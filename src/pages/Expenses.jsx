@@ -1,4 +1,7 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import * as XLSX from 'xlsx';
+
+const THIS_MONTH = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
@@ -9,7 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, MoreVertical, Pencil, Trash2, Upload, Plus, CheckCircle, Download, PenLine, Mail, Sparkles, TrendingDown, Clock, Receipt, FileX } from 'lucide-react';
+import { Search, MoreVertical, Pencil, Trash2, Upload, Plus, CheckCircle, Download, PenLine, Mail, Sparkles, TrendingDown, Clock, Receipt, FileX, RefreshCw, Save, Loader2 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import ReceiptReviewDialog from '@/components/ReceiptReviewDialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { format } from 'date-fns';
@@ -19,6 +24,123 @@ import { toast } from 'sonner';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useIsAdminView } from '@/hooks/useIsAdminView';
 import ExpenseEditDialog from '@/components/expenses/ExpenseEditDialog';
+
+// ── Recurring Expenses Tab ────────────────────────────────────
+function RecurringExpensesTab() {
+  const queryClient = useQueryClient();
+  const { data: recurring = [] } = useQuery({ queryKey: ['recurring'], queryFn: () => base44.entities.RecurringExpense.list() });
+  const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: () => base44.entities.Category.list() });
+
+  const empty = { name: '', vendor_name: '', amount: '', category: '', payment_method: '', day_of_month: 1, is_active: true };
+  const [newR, setNewR] = useState(null);
+  const [editR, setEditR] = useState(null);
+
+  const createR = useMutation({
+    mutationFn: (d) => base44.entities.RecurringExpense.create({ ...d, amount: parseFloat(d.amount) || 0 }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['recurring'] }); toast.success('נוצרה הוצאה קבועה'); setNewR(null); },
+    onError: () => toast.error('שגיאה ביצירת הוצאה קבועה'),
+  });
+  const updateR = useMutation({
+    mutationFn: ({ id, ...d }) => base44.entities.RecurringExpense.update(id, { ...d, amount: parseFloat(d.amount) || 0 }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['recurring'] }); toast.success('עודכנה'); setEditR(null); },
+    onError: () => toast.error('שגיאה בעדכון'),
+  });
+  const deleteR = useMutation({
+    mutationFn: (id) => base44.entities.RecurringExpense.delete(id),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['recurring'] }); toast.success('נמחקה'); },
+    onError: () => toast.error('שגיאה במחיקה'),
+  });
+  const toggleR = useMutation({
+    mutationFn: ({ id, is_active }) => base44.entities.RecurringExpense.update(id, { is_active }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['recurring'] }),
+    onError: () => toast.error('שגיאה בעדכון הסטטוס'),
+  });
+
+  const RecurringForm = ({ data, setData, onSubmit, isPending, submitLabel }) => (
+    <div className="space-y-3">
+      <div className="space-y-1"><Label className="text-xs">שם *</Label><Input value={data.name} onChange={e => setData(p => ({ ...p, name: e.target.value }))} className="rounded-xl" /></div>
+      <div className="space-y-1"><Label className="text-xs">ספק</Label><Input value={data.vendor_name} onChange={e => setData(p => ({ ...p, vendor_name: e.target.value }))} className="rounded-xl" /></div>
+      <div className="space-y-1"><Label className="text-xs">סכום *</Label><Input type="number" value={data.amount} onChange={e => setData(p => ({ ...p, amount: e.target.value }))} className="rounded-xl" /></div>
+      <div className="space-y-1">
+        <Label className="text-xs">קטגוריה</Label>
+        <Select value={data.category} onValueChange={v => setData(p => ({ ...p, category: v }))}>
+          <SelectTrigger className="rounded-xl"><SelectValue placeholder="בחר" /></SelectTrigger>
+          <SelectContent>{categories.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">אמצעי תשלום</Label>
+        <Select value={data.payment_method} onValueChange={v => setData(p => ({ ...p, payment_method: v }))}>
+          <SelectTrigger className="rounded-xl"><SelectValue placeholder="בחר" /></SelectTrigger>
+          <SelectContent>{Object.entries(PAYMENT_METHODS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1"><Label className="text-xs">יום בחודש</Label><Input type="number" min="1" max="31" value={data.day_of_month} onChange={e => setData(p => ({ ...p, day_of_month: parseInt(e.target.value) || 1 }))} className="rounded-xl" /></div>
+      <Button onClick={onSubmit} disabled={!data.name || !data.amount || isPending} className="w-full gap-2 rounded-xl">{submitLabel}</Button>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <Button onClick={() => setNewR(empty)} className="gap-2 rounded-xl"><Plus className="w-4 h-4" /> הוצאה קבועה חדשה</Button>
+      </div>
+
+      <Dialog open={!!newR} onOpenChange={() => setNewR(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>הוספת הוצאה קבועה</DialogTitle></DialogHeader>
+          {newR && <RecurringForm data={newR} setData={setNewR} onSubmit={() => createR.mutate(newR)} isPending={createR.isPending} submitLabel={<><Plus className="w-4 h-4" /> הוסף</>} />}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editR} onOpenChange={() => setEditR(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>עריכת הוצאה קבועה</DialogTitle></DialogHeader>
+          {editR && <RecurringForm data={editR} setData={setEditR} onSubmit={() => updateR.mutate(editR)} isPending={updateR.isPending} submitLabel={<><Save className="w-4 h-4" /> שמור שינויים</>} />}
+        </DialogContent>
+      </Dialog>
+
+      <Card className="rounded-2xl overflow-hidden">
+        <Table>
+          <TableHeader><TableRow className="bg-muted/50">
+            <TableHead className="w-12"></TableHead>
+            <TableHead className="text-right">שם</TableHead>
+            <TableHead className="text-right">ספק</TableHead>
+            <TableHead className="text-right">סכום</TableHead>
+            <TableHead className="text-right">קטגוריה</TableHead>
+            <TableHead className="text-right">יום</TableHead>
+            <TableHead className="text-right">פעיל</TableHead>
+          </TableRow></TableHeader>
+          <TableBody>
+            {recurring.length === 0 ? (
+              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">אין הוצאות קבועות</TableCell></TableRow>
+            ) : recurring.map(r => (
+              <TableRow key={r.id}>
+                <TableCell>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="w-4 h-4" /></Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuItem onClick={() => setEditR({ ...r, amount: r.amount?.toString() ?? '' })}><Pencil className="w-4 h-4 ml-2" /> עריכה</DropdownMenuItem>
+                      <DropdownMenuItem className="text-destructive" onClick={() => { if (window.confirm(`למחוק את "${r.name}"?`)) deleteR.mutate(r.id); }}><Trash2 className="w-4 h-4 ml-2" /> מחיקה</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
+                <TableCell className="font-medium">{r.name}</TableCell>
+                <TableCell>{r.vendor_name || '-'}</TableCell>
+                <TableCell>₪{r.amount?.toLocaleString()}</TableCell>
+                <TableCell>{r.category || '-'}</TableCell>
+                <TableCell>{r.day_of_month}</TableCell>
+                <TableCell><Switch checked={r.is_active} onCheckedChange={v => toggleR.mutate({ id: r.id, is_active: v })} /></TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
+    </div>
+  );
+}
 
 // ── Gmail Inbox Tab ───────────────────────────────────────────
 function GmailInboxTab({ inboxExpenses, isLoading, onDelete, isAdminView }) {
@@ -114,10 +236,15 @@ export default function Expenses() {
   const isAdminView = useIsAdminView();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [agentFilter, setAgentFilter] = useState('all');
+  const [dateFrom, setDateFrom] = useState(THIS_MONTH);
+  const [dateTo, setDateTo] = useState(THIS_MONTH);
   const [viewExpense, setViewExpense] = useState(null);
   const [editExpense, setEditExpense] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showReceiptDialog, setShowReceiptDialog] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const tableRef = useRef(null);
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -161,8 +288,17 @@ export default function Expenses() {
   const filtered = useMemo(() => expenses.filter(e => {
     const matchSearch = !search || e.vendor_name?.toLowerCase().includes(search.toLowerCase()) || e.category?.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'all' || e.status === statusFilter;
-    return matchSearch && matchStatus;
-  }), [expenses, search, statusFilter]);
+    const matchAgent = agentFilter === 'all' || e.agent_id === agentFilter;
+    const matchDate = (() => {
+      if (!dateFrom && !dateTo) return true;
+      if (!e.date) return false;
+      const m = e.date.slice(0, 7);
+      if (dateFrom && m < dateFrom) return false;
+      if (dateTo && m > dateTo) return false;
+      return true;
+    })();
+    return matchSearch && matchStatus && matchAgent && matchDate;
+  }), [expenses, search, statusFilter, agentFilter, dateFrom, dateTo]);
 
   const totalFiltered = filtered.reduce((s, e) => s + (e.total_amount || 0), 0);
 
@@ -173,6 +309,42 @@ export default function Expenses() {
     missingReceipt: expenses.filter(e => !e.has_receipt).length,
   }), [expenses]);
 
+  const exportExcel = () => {
+    const wb = XLSX.utils.book_new();
+    const rows = filtered.map(e => ({
+      תאריך: e.date || '',
+      ספק: e.vendor_name || '',
+      קטגוריה: e.category || '',
+      סכום: e.total_amount || 0,
+      סטטוס: e.status || '',
+      סוכן: e.agent_name || '',
+      'אמצעי תשלום': e.payment_method || '',
+      הערות: e.notes || '',
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'הוצאות');
+    XLSX.writeFile(wb, `הוצאות_${dateFrom || 'כל'}_${dateTo || 'הזמנים'}.xlsx`);
+    toast.success('הקובץ יוצא בהצלחה');
+  };
+
+  const exportPDF = async () => {
+    if (!tableRef.current) return;
+    setExporting(true);
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const jsPDF = (await import('jspdf')).default;
+      const canvas = await html2canvas(tableRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const imgW = pageW - 20;
+      const imgH = (canvas.height * imgW) / canvas.width;
+      pdf.addImage(imgData, 'PNG', 10, 10, imgW, imgH);
+      pdf.save(`הוצאות_${dateFrom || 'כל'}_${dateTo || 'הזמנים'}.pdf`);
+      toast.success('הדוח יוצא בהצלחה');
+    } catch { toast.error('שגיאה בייצוא PDF'); }
+    finally { setExporting(false); }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4 flex-wrap">
@@ -180,11 +352,6 @@ export default function Expenses() {
           <h1 className="text-2xl font-bold">קבלות והוצאות</h1>
           <p className="text-muted-foreground text-sm mt-1">{filtered.length} הוצאות • סה״כ {formatCurrency(totalFiltered)}</p>
         </div>
-        {!isAdminView && (
-          <Button className="gap-2 rounded-xl" onClick={() => setShowReceiptDialog(true)}>
-            הוצאה חדשה <Plus className="w-4 h-4" />
-          </Button>
-        )}
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -215,7 +382,7 @@ export default function Expenses() {
       </div>
 
       <Tabs defaultValue="expenses">
-        <TabsList className="rounded-xl">
+        <TabsList className="rounded-xl flex-wrap h-auto gap-1">
           <TabsTrigger value="expenses" className="gap-2 rounded-lg">הוצאות ({expenses.length})</TabsTrigger>
           <TabsTrigger value="gmail" className="gap-2 rounded-lg">
             <Mail className="w-4 h-4" /> חשבוניות ממייל
@@ -223,12 +390,15 @@ export default function Expenses() {
               <span className="ms-1 bg-violet-600 text-white text-xs rounded-full px-1.5 py-0.5 leading-none">{gmailInbox.length}</span>
             )}
           </TabsTrigger>
+          <TabsTrigger value="recurring" className="gap-2 rounded-lg">
+            <RefreshCw className="w-4 h-4" /> הוצאות קבועות
+          </TabsTrigger>
         </TabsList>
 
         {/* ── הוצאות Tab ── */}
         <TabsContent value="expenses" className="mt-4 space-y-4">
           <Card className="rounded-2xl">
-            <CardContent className="p-4">
+            <CardContent className="p-4 space-y-3">
               <div className="flex flex-wrap gap-3">
                 <div className="relative flex-1 min-w-[200px]">
                   <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -241,11 +411,34 @@ export default function Expenses() {
                     {Object.entries(STATUS_MAP).filter(([k]) => k !== 'gmail_inbox').map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                {isAdminView && (
+                  <Select value={agentFilter} onValueChange={setAgentFilter}>
+                    <SelectTrigger className="w-40 rounded-xl"><SelectValue placeholder="כל הסוכנים" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">כל הסוכנים</SelectItem>
+                      {agents.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-xs text-muted-foreground whitespace-nowrap">טווח תאריכים:</span>
+                <Input type="month" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-36 rounded-xl" />
+                <span className="text-muted-foreground text-sm">—</span>
+                <Input type="month" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-36 rounded-xl" />
+                <div className="flex gap-2 mr-auto">
+                  <Button variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={exportExcel}>
+                    <Download className="w-4 h-4" /> Excel
+                  </Button>
+                  <Button variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={exportPDF} disabled={exporting}>
+                    {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} PDF
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl overflow-hidden">
+          <Card className="rounded-2xl overflow-hidden" ref={tableRef}>
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -323,6 +516,11 @@ export default function Expenses() {
             onDelete={(id) => deleteMutation.mutate(id)}
             isAdminView={isAdminView}
           />
+        </TabsContent>
+
+        {/* ── הוצאות קבועות Tab ── */}
+        <TabsContent value="recurring" className="mt-4">
+          <RecurringExpensesTab />
         </TabsContent>
       </Tabs>
 
