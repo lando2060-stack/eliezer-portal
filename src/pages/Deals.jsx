@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, MoreVertical, Pencil, Trash2, FileSpreadsheet } from 'lucide-react';
+import { Search, MoreVertical, Pencil, Trash2, FileSpreadsheet, Download, Loader2 } from 'lucide-react';
 import { formatCurrency, DEAL_STATUS_MAP } from '@/lib/constants';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useIsAdminView } from '@/hooks/useIsAdminView';
@@ -31,6 +32,8 @@ export default function Deals() {
   const [editDeal, setEditDeal] = useState(null);
   const [viewDeal, setViewDeal] = useState(null);
   const [showImport, setShowImport] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const tableRef = useRef(null);
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -82,6 +85,44 @@ export default function Deals() {
   const totalCommission = filtered.reduce((s, d) => s + (d.commission_amount || 0), 0);
   const totalCollected = filtered.reduce((s, d) => s + (d.collected_actual || 0), 0);
 
+  const exportExcel = () => {
+    const wb = XLSX.utils.book_new();
+    const rows = filtered.map(d => ({
+      תאריך: d.month || '',
+      לקוח: d.client_name || '',
+      כתובת: d.address || '',
+      סוכן: d.agent_name || '',
+      'סכום עסקה': d.deal_amount || 0,
+      עמלה: d.commission_amount || 0,
+      נגבה: d.collected_actual || 0,
+      'עמלת סוכן': d.agent_commission || 0,
+      'עמלת משרד': d.office_commission || 0,
+      סטטוס: d.status || '',
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'עסקאות');
+    XLSX.writeFile(wb, `עסקאות_${dateFrom || 'כל'}_${dateTo || 'הזמנים'}.xlsx`);
+    toast.success('הקובץ יוצא בהצלחה');
+  };
+
+  const exportPDF = async () => {
+    if (!tableRef.current) return;
+    setExporting(true);
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const jsPDF = (await import('jspdf')).default;
+      const canvas = await html2canvas(tableRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const imgW = pageW - 20;
+      const imgH = (canvas.height * imgW) / canvas.width;
+      pdf.addImage(imgData, 'PNG', 10, 10, imgW, imgH);
+      pdf.save(`עסקאות_${dateFrom || 'כל'}_${dateTo || 'הזמנים'}.pdf`);
+      toast.success('הדוח יוצא בהצלחה');
+    } catch { toast.error('שגיאה בייצוא PDF'); }
+    finally { setExporting(false); }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4 flex-wrap">
@@ -96,6 +137,12 @@ export default function Deals() {
             <FileSpreadsheet className="w-4 h-4" /> ייבוא מאקסל
           </Button>
         )}
+        <Button variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={exportExcel}>
+          <Download className="w-4 h-4" /> Excel
+        </Button>
+        <Button variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={exportPDF} disabled={exporting}>
+          {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} PDF
+        </Button>
       </div>
 
       <Card className="rounded-2xl">
@@ -153,7 +200,7 @@ export default function Deals() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-2xl overflow-hidden">
+      <Card className="rounded-2xl overflow-hidden" ref={tableRef}>
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
