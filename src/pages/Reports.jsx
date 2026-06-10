@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Download, TrendingUp, FileText, DollarSign, Loader2, Wallet, Search, Plus, MoreVertical, Pencil, Trash2, Save } from 'lucide-react';
+import { Download, TrendingUp, FileText, DollarSign, Loader2, Wallet, Search, MoreVertical, Pencil, Trash2, Save, FileSpreadsheet } from 'lucide-react';
 import { formatCurrency } from '@/lib/constants';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useIsAdminView } from '@/hooks/useIsAdminView';
@@ -19,6 +19,7 @@ import { downloadCSV } from '@/lib/csv';
 import { format } from 'date-fns';
 import { useLocation, useNavigate } from 'react-router-dom';
 import AddPaymentDialog from '@/components/deals/AddPaymentDialog';
+import ExcelImportDialog from '@/components/ExcelImportDialog';
 
 const PAYMENT_METHODS = ['מזומן', 'שיק', 'העברה בנקאית', 'כרטיס אשראי', 'ביט', 'פייפאל', 'אחר'];
 
@@ -42,11 +43,13 @@ export default function Reports() {
   const [selectedAgent, setSelectedAgent] = useState('all');
   const [dateFrom, setDateFrom] = useState(THIS_MONTH);
   const [dateTo, setDateTo] = useState(THIS_MONTH);
+  const [search, setSearch] = useState('');
   const [exporting, setExporting] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerSearch, setPickerSearch] = useState('');
   const [selectedDeal, setSelectedDeal] = useState(null);
   const [editPayment, setEditPayment] = useState(null);
+  const [showImport, setShowImport] = useState(false);
   const [editForm, setEditForm] = useState({});
   const reportRef = useRef(null);
   const location = useLocation();
@@ -126,7 +129,17 @@ export default function Reports() {
     });
   }, [allPayments, isAdminView, myDealIds, selectedAgent, dateFrom, dateTo]);
 
-  const totalAmount = useMemo(() => payments.reduce((s, p) => s + (p.amount || 0), 0), [payments]);
+  const filteredPayments = useMemo(() => {
+    if (!search) return payments;
+    const q = search.toLowerCase();
+    return payments.filter(p =>
+      p.deal_client_name?.toLowerCase().includes(q) ||
+      p.deal_address?.toLowerCase().includes(q) ||
+      p.agent_name?.toLowerCase().includes(q)
+    );
+  }, [payments, search]);
+
+  const totalAmount = useMemo(() => filteredPayments.reduce((s, p) => s + (p.amount || 0), 0), [filteredPayments]);
 
   // Deals available for picker (non-cancelled, scoped to agent if not admin)
   const pickerDeals = useMemo(() => {
@@ -140,7 +153,7 @@ export default function Reports() {
   }, [allDeals, isAdminView, myAgent, pickerSearch]);
 
   const exportCSV = () => {
-    downloadCSV(`הכנסות_${dateFrom || 'כל'}_${dateTo || 'הזמנים'}.csv`, payments, {
+    downloadCSV(`הכנסות_${dateFrom || 'כל'}_${dateTo || 'הזמנים'}.csv`, filteredPayments, {
       date: 'תאריך', deal_client_name: 'לקוח', deal_address: 'כתובת',
       amount: 'סכום', payment_method: 'אמצעי תשלום', agent_name: 'סוכן', notes: 'הערות',
     });
@@ -169,25 +182,31 @@ export default function Reports() {
   return (
     <div className="space-y-6" ref={reportRef}>
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
+      <div className="flex items-center flex-wrap gap-3">
+        <div className="me-auto">
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Wallet className="w-6 h-6 text-primary" /> הכנסות
           </h1>
           <p className="text-muted-foreground text-sm mt-1">תשלומים שהתקבלו בפועל מעסקאות</p>
         </div>
-        <Button className="gap-2 rounded-xl" onClick={() => setPickerOpen(true)}>
-          <Plus className="w-4 h-4" /> הוסף הכנסה
+        <Button variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={() => setShowImport(true)}>
+          <FileSpreadsheet className="w-4 h-4" /> ייבוא מאקסל
+        </Button>
+        <Button variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={exportCSV}>
+          <Download className="w-4 h-4" /> Excel
+        </Button>
+        <Button variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={exportPDF} disabled={exporting}>
+          {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} PDF
         </Button>
       </div>
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <KpiCard label="סה״כ נגבה" value={formatCurrency(totalAmount)} icon={TrendingUp} color="bg-emerald-100 text-emerald-600" />
-        <KpiCard label="מספר הכנסות" value={payments.length} icon={FileText} color="bg-blue-100 text-blue-600" />
+        <KpiCard label="מספר הכנסות" value={filteredPayments.length} icon={FileText} color="bg-blue-100 text-blue-600" />
         <KpiCard
           label="ממוצע הכנסה"
-          value={payments.length ? formatCurrency(Math.round(totalAmount / payments.length)) : '—'}
+          value={filteredPayments.length ? formatCurrency(Math.round(totalAmount / filteredPayments.length)) : '—'}
           icon={DollarSign}
           color="bg-purple-100 text-purple-600"
         />
@@ -196,8 +215,12 @@ export default function Reports() {
       {/* Filters + export */}
       <Card className="rounded-2xl">
         <CardContent className="p-4 space-y-3">
-          {isAdminView && (
-            <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-3">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input placeholder="חיפוש לקוח, כתובת, סוכן..." value={search} onChange={e => setSearch(e.target.value)} className="pr-9 rounded-xl" />
+            </div>
+            {isAdminView && (
               <Select value={selectedAgent} onValueChange={setSelectedAgent}>
                 <SelectTrigger className="w-40 rounded-xl"><SelectValue placeholder="כל הסוכנים" /></SelectTrigger>
                 <SelectContent>
@@ -205,21 +228,13 @@ export default function Reports() {
                   {agents.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
-          )}
+            )}
+          </div>
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-xs text-muted-foreground whitespace-nowrap">טווח תאריכים:</span>
             <Input type="month" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-36 rounded-xl" />
             <span className="text-muted-foreground text-sm">—</span>
             <Input type="month" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-36 rounded-xl" />
-            <div className="flex gap-2 mr-auto">
-              <Button variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={exportCSV}>
-                <Download className="w-4 h-4" /> Excel
-              </Button>
-              <Button variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={exportPDF} disabled={exporting}>
-                {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} PDF
-              </Button>
-            </div>
           </div>
         </CardContent>
       </Card>
@@ -230,7 +245,6 @@ export default function Reports() {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50">
-                <TableHead className="w-12"></TableHead>
                 <TableHead className="text-right">תאריך</TableHead>
                 <TableHead className="text-right">לקוח</TableHead>
                 <TableHead className="text-right">כתובת</TableHead>
@@ -238,28 +252,18 @@ export default function Reports() {
                 <TableHead className="text-right">סכום שהתקבל</TableHead>
                 <TableHead className="text-right">אמצעי תשלום</TableHead>
                 <TableHead className="text-right">הערות</TableHead>
+                <TableHead className="w-12"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {payments.length === 0 ? (
+              {filteredPayments.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={isAdminView ? 8 : 7} className="text-center py-12 text-muted-foreground">
                     אין הכנסות בתקופה זו
                   </TableCell>
                 </TableRow>
-              ) : payments.map(p => (
+              ) : filteredPayments.map(p => (
                 <TableRow key={p.id}>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="w-4 h-4" /></Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start">
-                        <DropdownMenuItem onClick={() => openEdit(p)}><Pencil className="w-4 h-4 ml-2" /> עריכה</DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive" onClick={() => { if (window.confirm('למחוק הכנסה זו?')) deleteMutation.mutate(p); }}><Trash2 className="w-4 h-4 ml-2" /> מחיקה</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
                   <TableCell className="text-sm">{p.date ? format(new Date(p.date), 'dd/MM/yy') : '-'}</TableCell>
                   <TableCell className="font-medium text-sm">{p.deal_client_name || '-'}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{p.deal_address || '-'}</TableCell>
@@ -267,6 +271,17 @@ export default function Reports() {
                   <TableCell className="text-sm font-semibold text-emerald-700">{formatCurrency(p.amount)}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{p.payment_method || '-'}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{p.notes || '-'}</TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="w-4 h-4" /></Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openEdit(p)}><Pencil className="w-4 h-4 ml-2" /> עריכה</DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive" onClick={() => { if (window.confirm('למחוק הכנסה זו?')) deleteMutation.mutate(p); }}><Trash2 className="w-4 h-4 ml-2" /> מחיקה</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -315,6 +330,15 @@ export default function Reports() {
         <AddPaymentDialog
           deal={selectedDeal}
           onClose={() => setSelectedDeal(null)}
+        />
+      )}
+
+      {showImport && (
+        <ExcelImportDialog
+          type="payments"
+          agents={agents}
+          deals={allDeals}
+          onClose={() => setShowImport(false)}
         />
       )}
 

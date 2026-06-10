@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Plus, Search, MoreVertical, Pencil, Trash2 } from 'lucide-react';
+import { Search, MoreVertical, Pencil, Trash2, FileSpreadsheet } from 'lucide-react';
 import { formatCurrency, DEAL_STATUS_MAP } from '@/lib/constants';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useIsAdminView } from '@/hooks/useIsAdminView';
@@ -16,6 +16,7 @@ import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import DealFormDialog from '@/components/deals/DealFormDialog';
 import DealDetailDialog from '@/components/deals/DealDetailDialog';
+import ExcelImportDialog from '@/components/ExcelImportDialog';
 
 export default function Deals() {
   const { user } = useCurrentUser();
@@ -25,8 +26,11 @@ export default function Deals() {
   const [agentFilter, setAgentFilter] = useState('all');
   const [lawyerFilter, setLawyerFilter] = useState('all');
   const [cooperationFilter, setCooperationFilter] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [editDeal, setEditDeal] = useState(null);
   const [viewDeal, setViewDeal] = useState(null);
+  const [showImport, setShowImport] = useState(false);
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -69,8 +73,11 @@ export default function Deals() {
     const matchAgent = agentFilter === 'all' || d.agent_id === agentFilter;
     const matchLawyer = lawyerFilter === 'all' || d.lawyer_name === lawyerFilter;
     const matchCooperation = cooperationFilter === 'all' || d.cooperation_agent === cooperationFilter;
-    return matchSearch && matchStatus && matchAgent && matchLawyer && matchCooperation;
-  }), [deals, search, statusFilter, agentFilter, lawyerFilter, cooperationFilter]);
+    const month = d.month || '';
+    const matchFrom = !dateFrom || month >= dateFrom;
+    const matchTo = !dateTo || month <= dateTo;
+    return matchSearch && matchStatus && matchAgent && matchLawyer && matchCooperation && matchFrom && matchTo;
+  }), [deals, search, statusFilter, agentFilter, lawyerFilter, cooperationFilter, dateFrom, dateTo]);
 
   const totalCommission = filtered.reduce((s, d) => s + (d.commission_amount || 0), 0);
   const totalCollected = filtered.reduce((s, d) => s + (d.collected_actual || 0), 0);
@@ -85,14 +92,14 @@ export default function Deals() {
           </p>
         </div>
         {isAdminView && (
-          <Button className="gap-2 rounded-xl" onClick={() => setEditDeal({})}>
-            עסקה חדשה <Plus className="w-4 h-4" />
+          <Button variant="outline" className="gap-2 rounded-xl" onClick={() => setShowImport(true)}>
+            <FileSpreadsheet className="w-4 h-4" /> ייבוא מאקסל
           </Button>
         )}
       </div>
 
       <Card className="rounded-2xl">
-        <CardContent className="p-4">
+        <CardContent className="p-4 space-y-3">
           <div className="flex flex-wrap gap-3">
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -136,6 +143,12 @@ export default function Deals() {
                 </SelectContent>
               </Select>
             )}
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">טווח תאריכים:</span>
+            <Input type="month" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-36 rounded-xl" />
+            <span className="text-muted-foreground text-sm">—</span>
+            <Input type="month" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-36 rounded-xl" />
           </div>
         </CardContent>
       </Card>
@@ -217,6 +230,14 @@ export default function Deals() {
           currentUser={user}
           myAgent={myAgent}
           onClose={() => setEditDeal(null)}
+        />
+      )}
+
+      {showImport && (
+        <ExcelImportDialog
+          type="deals"
+          agents={agents}
+          onClose={() => setShowImport(false)}
         />
       )}
     </div>

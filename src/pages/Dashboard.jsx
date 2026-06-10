@@ -340,8 +340,8 @@ export default function Dashboard() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50">
-                    <TableHead className="text-right">ספק</TableHead>
                     <TableHead className="text-right">תאריך</TableHead>
+                    <TableHead className="text-right">ספק</TableHead>
                     <TableHead className="text-right">סכום</TableHead>
                     <TableHead className="text-right">קטגוריה</TableHead>
                     <TableHead className="text-right">סטטוס</TableHead>
@@ -352,8 +352,8 @@ export default function Dashboard() {
                     const st = STATUS_MAP[e.status] || STATUS_MAP.pending_approval;
                     return (
                       <TableRow key={e.id}>
-                        <TableCell className="font-medium text-sm">{e.vendor_name || '-'}</TableCell>
                         <TableCell className="text-sm">{e.date ? format(new Date(e.date), 'dd/MM/yyyy') : '-'}</TableCell>
+                        <TableCell className="font-medium text-sm">{e.vendor_name || '-'}</TableCell>
                         <TableCell className="font-semibold text-sm">{formatCurrency(e.total_amount)}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{e.category || '-'}</TableCell>
                         <TableCell><Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge></TableCell>
@@ -432,8 +432,8 @@ export default function Dashboard() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50">
-                    <TableHead className="text-right">ספק</TableHead>
                     <TableHead className="text-right">תאריך</TableHead>
+                    <TableHead className="text-right">ספק</TableHead>
                     <TableHead className="text-right">סכום</TableHead>
                     <TableHead className="text-right">קטגוריה</TableHead>
                     <TableHead className="text-right">סוכן</TableHead>
@@ -446,8 +446,8 @@ export default function Dashboard() {
                     const st = STATUS_MAP[e.status] || STATUS_MAP.pending_approval;
                     return (
                       <TableRow key={e.id}>
-                        <TableCell className="font-medium text-sm">{e.vendor_name || '-'}</TableCell>
                         <TableCell className="text-sm">{e.date ? format(new Date(e.date), 'dd/MM/yyyy') : '-'}</TableCell>
+                        <TableCell className="font-medium text-sm">{e.vendor_name || '-'}</TableCell>
                         <TableCell className="font-semibold text-sm">{formatCurrency(e.total_amount)}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{e.category || '-'}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{e.agent_name || '-'}</TableCell>

@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, MoreVertical, Pencil, Trash2, Upload, Plus, CheckCircle, Download, PenLine, Mail, Sparkles, TrendingDown, Clock, Receipt, FileX, RefreshCw, Save, Loader2 } from 'lucide-react';
+import { Search, MoreVertical, Pencil, Trash2, Upload, Plus, CheckCircle, Download, PenLine, Mail, Sparkles, TrendingDown, Clock, Receipt, FileX, RefreshCw, Save, Loader2, FileSpreadsheet } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import ReceiptReviewDialog from '@/components/ReceiptReviewDialog';
@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useIsAdminView } from '@/hooks/useIsAdminView';
 import ExpenseEditDialog from '@/components/expenses/ExpenseEditDialog';
+import ExcelImportDialog from '@/components/ExcelImportDialog';
 
 // ── Recurring Expenses Tab ────────────────────────────────────
 function RecurringExpensesTab() {
@@ -243,6 +244,7 @@ export default function Expenses() {
   const [editExpense, setEditExpense] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showReceiptDialog, setShowReceiptDialog] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [exporting, setExporting] = useState(false);
   const tableRef = useRef(null);
   const queryClient = useQueryClient();
@@ -346,12 +348,21 @@ export default function Expenses() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4 flex-wrap">
+    <div className="space-y-6" dir="rtl">
+      <div className="flex items-center gap-3 flex-wrap">
         <div className="me-auto">
           <h1 className="text-2xl font-bold">קבלות והוצאות</h1>
           <p className="text-muted-foreground text-sm mt-1">{filtered.length} הוצאות • סה״כ {formatCurrency(totalFiltered)}</p>
         </div>
+        <Button variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={() => setShowImport(true)}>
+          <FileSpreadsheet className="w-4 h-4" /> ייבוא מאקסל
+        </Button>
+        <Button variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={exportExcel}>
+          <Download className="w-4 h-4" /> Excel
+        </Button>
+        <Button variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={exportPDF} disabled={exporting}>
+          {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} PDF
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -426,14 +437,6 @@ export default function Expenses() {
                 <Input type="month" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-36 rounded-xl" />
                 <span className="text-muted-foreground text-sm">—</span>
                 <Input type="month" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-36 rounded-xl" />
-                <div className="flex gap-2 mr-auto">
-                  <Button variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={exportExcel}>
-                    <Download className="w-4 h-4" /> Excel
-                  </Button>
-                  <Button variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={exportPDF} disabled={exporting}>
-                    {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} PDF
-                  </Button>
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -444,13 +447,13 @@ export default function Expenses() {
                 <TableHeader>
                   <TableRow className="bg-muted/50">
                     <TableHead className="w-12"></TableHead>
+                    <TableHead className="text-right">קבלה</TableHead>
+                    <TableHead className="text-right">סטטוס</TableHead>
+                    {isAdminView && <TableHead className="text-right">סוכן</TableHead>}
+                    <TableHead className="text-right">קטגוריה</TableHead>
+                    <TableHead className="text-right">סכום</TableHead>
                     <TableHead className="text-right">ספק</TableHead>
                     <TableHead className="text-right">תאריך</TableHead>
-                    <TableHead className="text-right">סכום</TableHead>
-                    <TableHead className="text-right">קטגוריה</TableHead>
-                    {isAdminView && <TableHead className="text-right">סוכן</TableHead>}
-                    <TableHead className="text-right">סטטוס</TableHead>
-                    <TableHead className="text-right">קבלה</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -488,17 +491,17 @@ export default function Expenses() {
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>
-                        <TableCell className="font-medium text-sm">{expense.vendor_name || '-'}</TableCell>
-                        <TableCell className="text-sm">{expense.date ? format(new Date(expense.date), 'dd/MM/yyyy') : '-'}</TableCell>
-                        <TableCell className="font-semibold text-sm">{formatCurrency(expense.total_amount, expense.currency)}</TableCell>
-                        <TableCell className="text-sm">{expense.category || '-'}</TableCell>
-                        {isAdminView && <TableCell className="text-sm text-muted-foreground">{expense.agent_name || '-'}</TableCell>}
-                        <TableCell><Badge variant="secondary" className={`text-xs ${status.color}`}>{status.label}</Badge></TableCell>
-                        <TableCell>
+                        <TableCell className="text-right">
                           {expense.has_receipt
                             ? <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 text-xs">יש</Badge>
                             : <Badge variant="secondary" className="bg-red-100 text-red-700 text-xs">חסרה</Badge>}
                         </TableCell>
+                        <TableCell className="text-right"><Badge variant="secondary" className={`text-xs ${status.color}`}>{status.label}</Badge></TableCell>
+                        {isAdminView && <TableCell className="text-sm text-muted-foreground text-right">{expense.agent_name || '-'}</TableCell>}
+                        <TableCell className="text-sm text-right">{expense.category || '-'}</TableCell>
+                        <TableCell className="font-semibold text-sm text-right">{formatCurrency(expense.total_amount, expense.currency)}</TableCell>
+                        <TableCell className="font-medium text-sm text-right">{expense.vendor_name || '-'}</TableCell>
+                        <TableCell className="text-sm text-right">{expense.date ? format(new Date(expense.date), 'dd/MM/yyyy') : '-'}</TableCell>
                       </TableRow>
                     );
                   })}
@@ -608,6 +611,14 @@ export default function Expenses() {
         isAdminView={isAdminView}
         onSaved={() => setShowReceiptDialog(false)}
       />
+
+      {showImport && (
+        <ExcelImportDialog
+          type="expenses"
+          agents={agents}
+          onClose={() => setShowImport(false)}
+        />
+      )}
     </div>
   );
 }
