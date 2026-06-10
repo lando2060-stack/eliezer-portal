@@ -16,6 +16,8 @@
  *   isAdminView     boolean
  */
 import React, { useState, useRef, useEffect } from 'react';
+import * as pdfjsLib from 'pdfjs-dist';
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).href;
 import { base44 } from '@/api/base44Client';
 import { supabase } from '@/lib/supabase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -64,6 +66,7 @@ export default function ReceiptReviewDialog({
   const [extractionFailed, setExtractionFailed] = useState(false);
   const [extractionError, setExtractionError] = useState('');
   const [imgFailed, setImgFailed] = useState(false);
+  const [pdfPageImage, setPdfPageImage] = useState(null);
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const queryClient = useQueryClient();
@@ -92,8 +95,28 @@ export default function ReceiptReviewDialog({
       setExtractionFailed(false);
       setExtractionError('');
       setImgFailed(false);
+      setPdfPageImage(null);
     }
   }, [open]);
+
+  // Render first page of a local PDF to JPEG for inline image preview
+  useEffect(() => {
+    if (!file || file.type !== 'application/pdf' || !previewUrl) { setPdfPageImage(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const pdf = await pdfjsLib.getDocument(previewUrl).promise;
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 2 });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        if (!cancelled) setPdfPageImage(canvas.toDataURL('image/jpeg', 0.88));
+      } catch { if (!cancelled) setPdfPageImage(null); }
+    })();
+    return () => { cancelled = true; };
+  }, [file, previewUrl]);
 
   const runExtraction = async (url) => {
     setStep('processing');
@@ -373,7 +396,7 @@ export default function ReceiptReviewDialog({
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium text-muted-foreground">תצוגת קבלה</p>
                     <div className="flex gap-1">
-                      {!useIframe && (
+                      {(!useIframe || pdfPageImage) && (
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setRotation(r => r + 90)}>
                           <RotateCw className="w-4 h-4" />
                         </Button>
@@ -385,7 +408,17 @@ export default function ReceiptReviewDialog({
                       </a>
                     </div>
                   </div>
-                  {useIframe ? (
+                  {pdfPageImage ? (
+                    /* Local PDF rendered to image — supports rotation */
+                    <div className="bg-muted rounded-xl overflow-hidden flex items-center justify-center min-h-[300px] max-h-[520px]">
+                      <img
+                        src={pdfPageImage}
+                        alt="קבלה"
+                        className="max-w-full max-h-[520px] object-contain transition-transform"
+                        style={{ transform: `rotate(${rotation}deg)` }}
+                      />
+                    </div>
+                  ) : useIframe ? (
                     <div className="bg-muted rounded-xl overflow-hidden" style={{ height: 520 }}>
                       <iframe
                         src={displayUrl}
