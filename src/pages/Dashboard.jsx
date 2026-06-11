@@ -72,7 +72,7 @@ export default function Dashboard() {
       return {
         month: label,
         עמלות: Math.round(mDeals.reduce((s, x) => s + (x.commission_amount || 0), 0)),
-        נגבה: Math.round(mDeals.reduce((s, x) => s + (x.collected_actual || 0), 0)),
+        עסקאות: mDeals.length,
       };
     });
   }, [deals]);
@@ -199,14 +199,15 @@ export default function Dashboard() {
             <h2 className="font-semibold mb-4">עמלות — 6 חודשים אחרונים</h2>
             <div style={{ direction: 'ltr' }}>
               <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={monthlyChart} margin={{ top: 0, right: 0, left: 10, bottom: 0 }}>
+                <BarChart data={monthlyChart} margin={{ top: 0, right: 45, left: 10, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                  <YAxis tickFormatter={formatShortCurrency} tick={{ fontSize: 11 }} width={55} />
-                  <Tooltip formatter={(v) => formatCurrency(v)} />
+                  <YAxis yAxisId="left" tickFormatter={formatShortCurrency} tick={{ fontSize: 11 }} width={55} />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} width={30} allowDecimals={false} />
+                  <Tooltip formatter={(v, name) => name === 'עמלות' ? formatCurrency(v) : v} />
                   <Legend />
-                  <Bar dataKey="עמלות" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="נגבה" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  <Bar yAxisId="left" dataKey="עמלות" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                  <Bar yAxisId="right" dataKey="עסקאות" fill="#10b981" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -221,13 +222,15 @@ export default function Dashboard() {
             <h2 className="font-semibold mb-4">עמלות לפי סוכן (כולל)</h2>
             <div style={{ direction: 'ltr' }}>
               <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={agentChart} margin={{ top: 0, right: 0, left: 10, bottom: 0 }}>
+                <BarChart data={agentChart} margin={{ top: 0, right: 45, left: 10, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                  <YAxis tickFormatter={formatShortCurrency} tick={{ fontSize: 11 }} width={55} />
+                  <YAxis yAxisId="left" tickFormatter={formatShortCurrency} tick={{ fontSize: 11 }} width={55} />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} width={30} allowDecimals={false} />
                   <Tooltip formatter={(v, name) => name === 'עמלה' ? formatCurrency(v) : v} />
                   <Legend />
-                  <Bar dataKey="עמלה" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                  <Bar yAxisId="left" dataKey="עמלה" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                  <Bar yAxisId="right" dataKey="עסקאות" fill="#10b981" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -284,7 +287,7 @@ export default function Dashboard() {
       </Card>
 
       {/* Agent: הכנסות אחרונות */}
-      {!isAdminView && deals.length > 0 && (
+      {!isAdminView && (
         <Card className="rounded-2xl overflow-hidden">
           <CardContent className="p-5 pb-2">
             <div className="flex items-center justify-between mb-3">
@@ -292,35 +295,39 @@ export default function Dashboard() {
               <Link to={reportsPath} className="text-sm text-primary hover:underline">כל ההכנסות</Link>
             </div>
           </CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/50">
-                  <TableHead className="text-right">חודש</TableHead>
-                  <TableHead className="text-right">לקוח</TableHead>
-                  <TableHead className="text-right">סכום עסקה</TableHead>
-                  <TableHead className="text-right">עמלה</TableHead>
-                  <TableHead className="text-right">עמלת סוכן</TableHead>
-                  <TableHead className="text-right">סטטוס</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {deals.slice(0, 5).map(d => {
-                  const st = DEAL_STATUS_MAP[d.status] || DEAL_STATUS_MAP['פתוחה'];
-                  return (
-                    <TableRow key={d.id}>
-                      <TableCell className="text-sm">{d.month || '-'}</TableCell>
-                      <TableCell className="font-medium text-sm">{d.client_name}</TableCell>
-                      <TableCell className="text-sm">{formatCurrency(d.deal_amount)}</TableCell>
-                      <TableCell className="text-sm font-semibold">{formatCurrency(d.commission_amount)}</TableCell>
-                      <TableCell className="text-sm text-emerald-700">{formatCurrency(d.agent_commission)}</TableCell>
-                      <TableCell><Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge></TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
+          {deals.slice(0, 5).length === 0 ? (
+            <p className="text-center py-4 text-muted-foreground text-sm">אין הכנסות עדיין</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="text-right">חודש</TableHead>
+                    <TableHead className="text-right">לקוח</TableHead>
+                    <TableHead className="text-right">סכום עסקה</TableHead>
+                    <TableHead className="text-right">עמלה</TableHead>
+                    <TableHead className="text-right">עמלת סוכן</TableHead>
+                    <TableHead className="text-right">סטטוס</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {deals.slice(0, 5).map(d => {
+                    const st = DEAL_STATUS_MAP[d.status] || DEAL_STATUS_MAP['פתוחה'];
+                    return (
+                      <TableRow key={d.id}>
+                        <TableCell className="text-sm">{d.month || '-'}</TableCell>
+                        <TableCell className="font-medium text-sm">{d.client_name}</TableCell>
+                        <TableCell className="text-sm">{formatCurrency(d.deal_amount)}</TableCell>
+                        <TableCell className="text-sm font-semibold">{formatCurrency(d.commission_amount)}</TableCell>
+                        <TableCell className="text-sm text-emerald-700">{formatCurrency(d.agent_commission)}</TableCell>
+                        <TableCell><Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge></TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </Card>
       )}
 
