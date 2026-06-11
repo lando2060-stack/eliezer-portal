@@ -279,10 +279,10 @@ export default function ReceiptReviewDialog({
                 default_category: payload.category || '',
                 receipt_count: 1,
                 total_expenses: payload.total_amount || 0,
-                last_expense_date: payload.date,
+                last_expense_date: payload.date || null,
               });
             }
-          } catch { /* non-fatal */ }
+          } catch (err) { console.error('vendor upsert failed:', err); }
         });
       }
 

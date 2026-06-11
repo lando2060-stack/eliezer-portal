@@ -24,7 +24,7 @@ import { downloadCSV } from '@/lib/csv';
 
 // ---- Agents Tab ----
 function AgentsTab() {
-  const EMPTY = { name: '', email: '', phone: '', commission_percent: 50, is_active: true, notes: '', user_id: '' };
+  const EMPTY = { name: '', email: '', phone: '', commission_percent: 50, is_active: true, notes: '' };
   const [dialog, setDialog] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const queryClient = useQueryClient();
@@ -34,9 +34,19 @@ function AgentsTab() {
   const { data: allExpenses = [] } = useQuery({ queryKey: ['expenses'], queryFn: () => base44.entities.Expense.list('-date', 200) });
 
   const saveMutation = useMutation({
-    mutationFn: () => dialog.id ? base44.entities.Agent.update(dialog.id, form) : base44.entities.Agent.create(form),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['agents'] }); toast.success(dialog.id ? 'הסוכן עודכן' : 'הסוכן נוסף'); setDialog(null); },
-    onError: () => toast.error('שגיאה בשמירת הסוכן'),
+    mutationFn: async () => {
+      if (dialog.id) return base44.entities.Agent.update(dialog.id, form);
+      const res = await fetch('/api/invite-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: form.email, role: 'agent' }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'שגיאה בשליחת הזמנה');
+      return base44.entities.Agent.create({ ...form, user_id: result.userId });
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['agents'] }); toast.success(dialog.id ? 'הסוכן עודכן' : 'הסוכן נוסף — הזמנה נשלחה למייל'); setDialog(null); },
+    onError: (err) => toast.error(err.message || 'שגיאה בשמירת הסוכן'),
   });
   const deleteMutation = useMutation({
     mutationFn: (id) => base44.entities.Agent.delete(id),
@@ -109,17 +119,18 @@ function AgentsTab() {
           <DialogHeader><DialogTitle>{dialog?.id ? 'עריכת סוכן' : 'סוכן חדש'}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1"><Label className="text-xs">שם סוכן *</Label><Input value={form.name} onChange={e => upd('name', e.target.value)} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1"><Label className="text-xs">טלפון</Label><Input value={form.phone} onChange={e => upd('phone', e.target.value)} /></div>
-              <div className="space-y-1"><Label className="text-xs">מייל</Label><Input type="email" value={form.email} onChange={e => upd('email', e.target.value)} /></div>
+            <div className="space-y-1">
+              <Label className="text-xs">מייל {!dialog?.id && <span className="text-destructive">*</span>}</Label>
+              <Input type="email" value={form.email} onChange={e => upd('email', e.target.value)} disabled={!!dialog?.id} />
+              {!dialog?.id && <p className="text-xs text-muted-foreground">הזמנה תישלח אוטומטית לכתובת זו</p>}
             </div>
             <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1"><Label className="text-xs">טלפון</Label><Input value={form.phone} onChange={e => upd('phone', e.target.value)} /></div>
               <div className="space-y-1"><Label className="text-xs">אחוז עמלה (%)</Label><Input type="number" value={form.commission_percent} onChange={e => upd('commission_percent', parseFloat(e.target.value))} /></div>
-              <div className="space-y-1"><Label className="text-xs">User ID (לחיבור)</Label><Input value={form.user_id} onChange={e => upd('user_id', e.target.value)} placeholder="אופציונלי" /></div>
             </div>
             <div className="flex items-center gap-3"><Switch checked={form.is_active} onCheckedChange={v => upd('is_active', v)} /><Label>סוכן פעיל</Label></div>
             <div className="space-y-1"><Label className="text-xs">הערות</Label><Textarea value={form.notes} onChange={e => upd('notes', e.target.value)} rows={2} /></div>
-            <Button className="w-full rounded-xl" onClick={() => saveMutation.mutate()} disabled={!form.name || saveMutation.isPending}>
+            <Button className="w-full rounded-xl" onClick={() => saveMutation.mutate()} disabled={!form.name || (!dialog?.id && !form.email) || saveMutation.isPending}>
               {dialog?.id ? 'שמור שינויים' : 'הוסף סוכן'}
             </Button>
           </div>

@@ -32,17 +32,27 @@ export default async function handler(req, res) {
     });
     if (error) throw error;
 
-    // Pre-create profile row with the requested role
     if (data.user) {
       await adminClient.from('profiles').upsert({
         id: data.user.id,
         role,
         full_name: '',
+        is_approved: true,
       });
     }
 
-    return res.status(200).json({ success: true });
+    return res.status(200).json({ success: true, userId: data.user.id });
   } catch (err) {
+    // User already exists — look them up and return their ID
+    if (err.message && (err.message.includes('already been registered') || err.message.includes('already registered') || err.message.includes('already exists'))) {
+      try {
+        const { data: { users } } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
+        const existing = users.find(u => u.email?.toLowerCase() === email.toLowerCase());
+        if (existing) {
+          return res.status(200).json({ success: true, userId: existing.id, alreadyExists: true });
+        }
+      } catch { /* fall through */ }
+    }
     console.error('invite-user error:', err);
     return res.status(400).json({ error: err.message || 'Invite failed' });
   }

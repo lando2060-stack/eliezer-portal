@@ -604,18 +604,17 @@ function AgentPermissionsTab() {
     queryKey: ['agent-profiles'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('profiles')
-        .select('id, full_name, phone, role, is_approved')
-        .eq('role', 'agent')
-        .eq('is_approved', true);
+        .from('agents')
+        .select('id, name, email, phone, user_id')
+        .neq('user_id', '');
       if (error) throw error;
       return data || [];
     },
   });
 
   const promoteAdminMutation = useMutation({
-    mutationFn: async (profileId) => {
-      const { error } = await supabase.from('profiles').update({ role: 'admin' }).eq('id', profileId);
+    mutationFn: async (agent) => {
+      const { error } = await supabase.from('profiles').update({ role: 'admin' }).eq('id', agent.user_id);
       if (error) throw error;
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['agent-profiles'] }); toast.success('הסוכן הפך למנהל'); },
@@ -623,8 +622,8 @@ function AgentPermissionsTab() {
   });
 
   const demoteMutation = useMutation({
-    mutationFn: async (profileId) => {
-      const { error } = await supabase.from('profiles').update({ role: 'agent' }).eq('id', profileId);
+    mutationFn: async (agent) => {
+      const { error } = await supabase.from('profiles').update({ role: 'agent' }).eq('id', agent.user_id);
       if (error) throw error;
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['agent-profiles'] }); toast.success('ההרשאה שונתה לסוכן'); },
@@ -720,7 +719,8 @@ function AgentPermissionsTab() {
         : agentProfiles.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">
             <Shield className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
-            <p className="font-medium">אין סוכנים פעילים</p>
+            <p className="font-medium">אין סוכנים עם חשבון מקושר</p>
+            <p className="text-sm mt-1">כדי להפוך סוכן למנהל, הוסף סוכן עם מייל מפאנל הניהול</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -731,8 +731,8 @@ function AgentPermissionsTab() {
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-purple-100 rounded-xl"><Shield className="w-5 h-5 text-purple-600" /></div>
                     <div>
-                      <p className="font-semibold">{p.full_name || 'ללא שם'}</p>
-                      <p className="text-xs text-muted-foreground">{p.phone || ''}</p>
+                      <p className="font-semibold">{p.name || 'ללא שם'}</p>
+                      <p className="text-xs text-muted-foreground">{p.email || p.phone || ''}</p>
                     </div>
                   </div>
                   <Button
@@ -740,8 +740,8 @@ function AgentPermissionsTab() {
                     variant="outline"
                     className="gap-1.5 rounded-xl border-purple-300 text-purple-700 hover:bg-purple-50"
                     onClick={() => {
-                      if (window.confirm(`להפוך את "${p.full_name}" למנהל? הוא יקבל גישה מלאה למערכת.`))
-                        promoteAdminMutation.mutate(p.id);
+                      if (window.confirm(`להפוך את "${p.name}" למנהל? הוא יקבל גישה מלאה למערכת.`))
+                        promoteAdminMutation.mutate(p);
                     }}
                     disabled={promoteAdminMutation.isPending}
                   >
