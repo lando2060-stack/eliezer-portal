@@ -65,24 +65,38 @@ export default function ExpenseEditDialog({ expense, categories, agents = [], cu
       const savedExpense = isNew
         ? await base44.entities.Expense.create(payload)
         : await base44.entities.Expense.update(expense.id, payload);
-
-      if (isNew && data.vendor_name) {
-        const existing = await base44.entities.Vendor.filter({ name: data.vendor_name });
-        if (existing.length === 0) {
-          await base44.entities.Vendor.create({
-            name: data.vendor_name,
-            ...(data.vendor_tax_id ? { tax_id: data.vendor_tax_id } : {}),
-          });
-        }
-      }
-
-      return savedExpense;
+      return { savedExpense, payload };
     },
-    onSuccess: () => {
+    onSuccess: ({ payload }) => {
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
-      queryClient.invalidateQueries({ queryKey: ['vendors'] });
       toast.success(isNew ? 'ההוצאה נוצרה' : 'ההוצאה עודכנה');
       onClose();
+
+      if (isNew && payload.vendor_name) {
+        Promise.resolve().then(async () => {
+          try {
+            const existing = await base44.entities.Vendor.filter({ name: payload.vendor_name });
+            if (existing.length > 0) {
+              await base44.entities.Vendor.update(existing[0].id, {
+                receipt_count: (existing[0].receipt_count || 0) + 1,
+                total_expenses: (existing[0].total_expenses || 0) + (payload.total_amount || 0),
+                last_expense_date: payload.date || existing[0].last_expense_date,
+                default_category: payload.category || existing[0].default_category,
+              });
+            } else {
+              await base44.entities.Vendor.create({
+                name: payload.vendor_name,
+                tax_id: payload.vendor_tax_id || '',
+                default_category: payload.category || '',
+                receipt_count: 1,
+                total_expenses: payload.total_amount || 0,
+                last_expense_date: payload.date || '',
+              });
+            }
+            queryClient.invalidateQueries({ queryKey: ['vendors'] });
+          } catch { /* non-fatal */ }
+        });
+      }
     },
     onError: () => toast.error('שגיאה בשמירת ההוצאה'),
   });
