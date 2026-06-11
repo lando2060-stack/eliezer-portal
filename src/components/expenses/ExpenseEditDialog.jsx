@@ -62,10 +62,25 @@ export default function ExpenseEditDialog({ expense, categories, agents = [], cu
         agent_id: data.agent_id || myAgent?.id || '',
         agent_name: data.agent_name || myAgent?.name || '',
       };
-      return isNew ? base44.entities.Expense.create(payload) : base44.entities.Expense.update(expense.id, payload);
+      const savedExpense = isNew
+        ? await base44.entities.Expense.create(payload)
+        : await base44.entities.Expense.update(expense.id, payload);
+
+      if (isNew && data.vendor_name) {
+        const existing = await base44.entities.Vendor.filter({ name: data.vendor_name });
+        if (existing.length === 0) {
+          await base44.entities.Vendor.create({
+            name: data.vendor_name,
+            ...(data.vendor_tax_id ? { tax_id: data.vendor_tax_id } : {}),
+          });
+        }
+      }
+
+      return savedExpense;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      queryClient.invalidateQueries({ queryKey: ['vendors'] });
       toast.success(isNew ? 'ההוצאה נוצרה' : 'ההוצאה עודכנה');
       onClose();
     },

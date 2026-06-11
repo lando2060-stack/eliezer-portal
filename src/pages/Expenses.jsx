@@ -27,6 +27,32 @@ import ExpenseEditDialog from '@/components/expenses/ExpenseEditDialog';
 import ExcelImportDialog from '@/components/ExcelImportDialog';
 
 // ── Recurring Expenses Tab ────────────────────────────────────
+function RecurringForm({ data, setData, onSubmit, isPending, submitLabel, categories }) {
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1"><Label className="text-xs">שם *</Label><Input value={data.name} onChange={e => setData(p => ({ ...p, name: e.target.value }))} className="rounded-xl" /></div>
+      <div className="space-y-1"><Label className="text-xs">ספק</Label><Input value={data.vendor_name} onChange={e => setData(p => ({ ...p, vendor_name: e.target.value }))} className="rounded-xl" /></div>
+      <div className="space-y-1"><Label className="text-xs">סכום *</Label><Input type="number" value={data.amount} onChange={e => setData(p => ({ ...p, amount: e.target.value }))} className="rounded-xl" /></div>
+      <div className="space-y-1">
+        <Label className="text-xs">קטגוריה</Label>
+        <Select value={data.category} onValueChange={v => setData(p => ({ ...p, category: v }))}>
+          <SelectTrigger className="rounded-xl"><SelectValue placeholder="בחר" /></SelectTrigger>
+          <SelectContent>{categories.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">אמצעי תשלום</Label>
+        <Select value={data.payment_method} onValueChange={v => setData(p => ({ ...p, payment_method: v }))}>
+          <SelectTrigger className="rounded-xl"><SelectValue placeholder="בחר" /></SelectTrigger>
+          <SelectContent>{Object.entries(PAYMENT_METHODS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1"><Label className="text-xs">יום בחודש</Label><Input type="number" min="1" max="31" value={data.day_of_month} onChange={e => setData(p => ({ ...p, day_of_month: parseInt(e.target.value) || 1 }))} className="rounded-xl" /></div>
+      <Button onClick={onSubmit} disabled={!data.name || !data.amount || isPending} className="w-full gap-2 rounded-xl">{submitLabel}</Button>
+    </div>
+  );
+}
+
 function RecurringExpensesTab() {
   const queryClient = useQueryClient();
   const { data: recurring = [] } = useQuery({ queryKey: ['recurring'], queryFn: () => base44.entities.RecurringExpense.list() });
@@ -57,30 +83,6 @@ function RecurringExpensesTab() {
     onError: () => toast.error('שגיאה בעדכון הסטטוס'),
   });
 
-  const RecurringForm = ({ data, setData, onSubmit, isPending, submitLabel }) => (
-    <div className="space-y-3">
-      <div className="space-y-1"><Label className="text-xs">שם *</Label><Input value={data.name} onChange={e => setData(p => ({ ...p, name: e.target.value }))} className="rounded-xl" /></div>
-      <div className="space-y-1"><Label className="text-xs">ספק</Label><Input value={data.vendor_name} onChange={e => setData(p => ({ ...p, vendor_name: e.target.value }))} className="rounded-xl" /></div>
-      <div className="space-y-1"><Label className="text-xs">סכום *</Label><Input type="number" value={data.amount} onChange={e => setData(p => ({ ...p, amount: e.target.value }))} className="rounded-xl" /></div>
-      <div className="space-y-1">
-        <Label className="text-xs">קטגוריה</Label>
-        <Select value={data.category} onValueChange={v => setData(p => ({ ...p, category: v }))}>
-          <SelectTrigger className="rounded-xl"><SelectValue placeholder="בחר" /></SelectTrigger>
-          <SelectContent>{categories.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
-        </Select>
-      </div>
-      <div className="space-y-1">
-        <Label className="text-xs">אמצעי תשלום</Label>
-        <Select value={data.payment_method} onValueChange={v => setData(p => ({ ...p, payment_method: v }))}>
-          <SelectTrigger className="rounded-xl"><SelectValue placeholder="בחר" /></SelectTrigger>
-          <SelectContent>{Object.entries(PAYMENT_METHODS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
-        </Select>
-      </div>
-      <div className="space-y-1"><Label className="text-xs">יום בחודש</Label><Input type="number" min="1" max="31" value={data.day_of_month} onChange={e => setData(p => ({ ...p, day_of_month: parseInt(e.target.value) || 1 }))} className="rounded-xl" /></div>
-      <Button onClick={onSubmit} disabled={!data.name || !data.amount || isPending} className="w-full gap-2 rounded-xl">{submitLabel}</Button>
-    </div>
-  );
-
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
@@ -90,14 +92,14 @@ function RecurringExpensesTab() {
       <Dialog open={!!newR} onOpenChange={() => setNewR(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>הוספת הוצאה קבועה</DialogTitle></DialogHeader>
-          {newR && <RecurringForm data={newR} setData={setNewR} onSubmit={() => createR.mutate(newR)} isPending={createR.isPending} submitLabel={<><Plus className="w-4 h-4" /> הוסף</>} />}
+          {newR && <RecurringForm data={newR} setData={setNewR} onSubmit={() => createR.mutate(newR)} isPending={createR.isPending} submitLabel={<><Plus className="w-4 h-4" /> הוסף</>} categories={categories} />}
         </DialogContent>
       </Dialog>
 
       <Dialog open={!!editR} onOpenChange={() => setEditR(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>עריכת הוצאה קבועה</DialogTitle></DialogHeader>
-          {editR && <RecurringForm data={editR} setData={setEditR} onSubmit={() => updateR.mutate(editR)} isPending={updateR.isPending} submitLabel={<><Save className="w-4 h-4" /> שמור שינויים</>} />}
+          {editR && <RecurringForm data={editR} setData={setEditR} onSubmit={() => updateR.mutate(editR)} isPending={updateR.isPending} submitLabel={<><Save className="w-4 h-4" /> שמור שינויים</>} categories={categories} />}
         </DialogContent>
       </Dialog>
 

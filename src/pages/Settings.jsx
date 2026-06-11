@@ -116,18 +116,6 @@ function ProfileTab() {
         </CardContent>
       </Card>
 
-      {/* Logout */}
-      <Card className="rounded-2xl border-destructive/20">
-        <CardContent className="p-4 flex items-center justify-between">
-          <div>
-            <p className="font-medium text-sm">יציאה מהמערכת</p>
-            <p className="text-xs text-muted-foreground">תצא מהחשבון שלך</p>
-          </div>
-          <Button variant="destructive" className="rounded-xl gap-2" onClick={() => base44.auth.logout('/login')}>
-            <LogOut className="w-4 h-4" /> יציאה
-          </Button>
-        </CardContent>
-      </Card>
     </div>
   );
 }
@@ -649,26 +637,24 @@ function AgentPermissionsTab() {
     queryFn: () => base44.entities.Agent.list(),
   });
 
-  const updatePermMutation = useMutation({
-    mutationFn: ({ id, permissions }) => base44.entities.Agent.update(id, { permissions }),
-    onMutate: async ({ id, permissions }) => {
-      await queryClient.cancelQueries({ queryKey: ['agents'] });
-      const previousAgents = queryClient.getQueryData(['agents']);
-      queryClient.setQueryData(['agents'], (old) =>
-        old?.map(a => a.id === id ? { ...a, permissions } : a) ?? []
-      );
-      return { previousAgents };
-    },
-    onError: (err, variables, context) => {
-      queryClient.setQueryData(['agents'], context.previousAgents);
-      toast.error('שגיאה בשמירת ההרשאה');
-    },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['agents'] }),
-  });
+  const [savingPerm, setSavingPerm] = useState(null); // "agentId:permKey"
 
-  const togglePerm = (agent, key) => {
+  const togglePerm = async (agent, key) => {
+    const token = `${agent.id}:${key}`;
+    if (savingPerm) return;
     const current = { ...PERM_DEFAULTS, ...(agent.permissions || {}) };
-    updatePermMutation.mutate({ id: agent.id, permissions: { ...current, [key]: !current[key] } });
+    const next = { ...current, [key]: !current[key] };
+    setSavingPerm(token);
+    try {
+      await base44.entities.Agent.update(agent.id, { permissions: next });
+      queryClient.setQueryData(['agents'], (old) =>
+        old?.map(a => a.id === agent.id ? { ...a, permissions: next } : a) ?? []
+      );
+    } catch {
+      toast.error('שגיאה בשמירת ההרשאה');
+    } finally {
+      setSavingPerm(null);
+    }
   };
 
   const tabs = [
@@ -793,18 +779,24 @@ function AgentPermissionsTab() {
                       </div>
                     </div>
                     <div className="space-y-3">
-                      {AGENT_PERMISSION_DEFS.map(def => (
-                        <div key={def.key} className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-medium">{def.label}</p>
-                            <p className="text-xs text-muted-foreground">{def.desc}</p>
+                      {AGENT_PERMISSION_DEFS.map(def => {
+                        const token = `${agent.id}:${def.key}`;
+                        const isSaving = savingPerm === token;
+                        return (
+                          <div key={def.key} className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-medium">{def.label}</p>
+                              <p className="text-xs text-muted-foreground">{def.desc}</p>
+                            </div>
+                            <Switch
+                              checked={perms[def.key]}
+                              onCheckedChange={() => togglePerm(agent, def.key)}
+                              disabled={!!savingPerm}
+                              className={isSaving ? 'opacity-50' : ''}
+                            />
                           </div>
-                          <Switch
-                            checked={perms[def.key]}
-                            onCheckedChange={() => togglePerm(agent, def.key)}
-                          />
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </CardContent>
                 </Card>

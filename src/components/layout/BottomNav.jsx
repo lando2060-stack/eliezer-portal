@@ -1,45 +1,50 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, FileText, Receipt, Wallet, Settings, Plus, X, Upload, PenLine, DollarSign } from 'lucide-react';
+import { LayoutDashboard, FileText, Receipt, Wallet, Settings, Plus, X, DollarSign, TrendingUp } from 'lucide-react';
+import ReceiptReviewDialog from '@/components/ReceiptReviewDialog';
+import { useAgentPermissions } from '@/hooks/useAgentPermissions';
 
 const navItems = [
   { path: '/',         label: 'דשבורד',  icon: LayoutDashboard },
   { path: '/deals',    label: 'עסקאות',  icon: FileText },
-  { path: '/expenses', label: 'הוצאות',  icon: Receipt },
+  { path: '/',         label: '',         icon: LayoutDashboard },
   { path: '/reports',  label: 'הכנסות',  icon: Wallet },
-  { path: '/settings', label: 'הגדרות',  icon: Settings },
+  { path: '/expenses', label: 'הוצאות',  icon: Receipt },
 ];
 
-const fabActions = [
-  { key: 'deal',    label: 'הוסף עסקה',   icon: PenLine,    color: 'bg-blue-500' },
-  { key: 'income',  label: 'הוסף הכנסה',  icon: DollarSign, color: 'bg-emerald-500' },
-  { key: 'upload',  label: 'העלאת קבלה',  icon: Upload,     color: 'bg-amber-500' },
-  { key: 'expense', label: 'הוסף הוצאה',  icon: Receipt,    color: 'bg-purple-500' },
+const ALL_FAB_ACTIONS = [
+  { key: 'deal',    permKey: 'can_add_deal',     label: 'הוסף עסקה',   icon: FileText,   color: 'bg-blue-500' },
+  { key: 'income',  permKey: 'can_add_income',    label: 'הוסף הכנסה',  icon: TrendingUp, color: 'bg-emerald-500' },
+  { key: 'expense', permKey: 'can_add_expense',   label: 'הוסף הוצאה',  icon: Receipt,    color: 'bg-amber-500' },
 ];
 
 export default function BottomNav() {
   const location = useLocation();
   const navigate = useNavigate();
   const [fabOpen, setFabOpen] = useState(false);
+  const [showReceiptDialog, setShowReceiptDialog] = useState(false);
+  const permissions = useAgentPermissions();
 
   // Detect if we're in the admin area
   const isAdmin = location.pathname.startsWith('/admin');
+
+  // Admins see all actions; agents see only what they're allowed
+  const fabActions = isAdmin
+    ? ALL_FAB_ACTIONS
+    : ALL_FAB_ACTIONS.filter(a => permissions[a.permKey]);
   const prefix = isAdmin ? '/admin' : '';
 
   const handleFabAction = (key) => {
     setFabOpen(false);
     switch (key) {
       case 'deal':
-        navigate(`${prefix}/deals`, { state: { openNew: true } });
+        navigate(`${prefix}/deals?new=1`);
         break;
       case 'income':
         navigate(`${prefix}/reports`, { state: { openPicker: true } });
         break;
-      case 'upload':
-        navigate(`${prefix}/upload`);
-        break;
       case 'expense':
-        navigate(`${prefix}/expenses`, { state: { openNew: true } });
+        setShowReceiptDialog(true);
         break;
     }
   };
@@ -66,6 +71,13 @@ export default function BottomNav() {
           ))}
         </div>
       )}
+
+      <ReceiptReviewDialog
+        open={showReceiptDialog}
+        onClose={() => setShowReceiptDialog(false)}
+        isAdminView={isAdmin}
+        onSaved={() => setShowReceiptDialog(false)}
+      />
 
       <div className="fixed bottom-0 inset-x-0 z-50 bg-white border-t border-border safe-area-bottom">
         <div className="flex items-center justify-around px-2 py-2 max-w-lg mx-auto">
