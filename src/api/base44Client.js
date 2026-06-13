@@ -82,6 +82,11 @@ const authApi = {
       if (updates.full_name !== undefined) patch.full_name = updates.full_name;
       const { error } = await supabase.from('profiles').update(patch).eq('id', user.id);
       if (error) throw error;
+      // Sync to agents table if this user has a linked agent record
+      const agentPatch = {};
+      if (updates.full_name !== undefined) agentPatch.name = updates.full_name;
+      if (updates.phone !== undefined) agentPatch.phone = updates.phone;
+      await supabase.from('agents').update(agentPatch).eq('user_id', user.id);
     }
   },
 

@@ -605,10 +605,23 @@ function AgentPermissionsTab() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('agents')
-        .select('id, name, email, phone, user_id')
-        .neq('user_id', '');
+        .select('id, name, email, phone, user_id');
       if (error) throw error;
-      return data || [];
+      const agents = data || [];
+
+      const userIds = agents.filter(a => a.user_id).map(a => a.user_id);
+      if (userIds.length === 0) return agents.map(a => ({ ...a, role: null }));
+
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, role')
+        .in('id', userIds);
+
+      const profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p]));
+      return agents.map(a => ({
+        ...a,
+        role: a.user_id ? (profileMap[a.user_id]?.role || 'agent') : null,
+      }));
     },
   });
 
@@ -719,8 +732,7 @@ function AgentPermissionsTab() {
         : agentProfiles.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">
             <Shield className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
-            <p className="font-medium">אין סוכנים עם חשבון מקושר</p>
-            <p className="text-sm mt-1">כדי להפוך סוכן למנהל, הוסף סוכן עם מייל מפאנל הניהול</p>
+            <p className="font-medium">אין סוכנים במערכת</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -733,20 +745,42 @@ function AgentPermissionsTab() {
                     <div>
                       <p className="font-semibold">{p.name || 'ללא שם'}</p>
                       <p className="text-xs text-muted-foreground">{p.email || p.phone || ''}</p>
+                      {p.role === 'admin' && (
+                        <Badge className="text-xs bg-purple-100 text-purple-700 border-purple-200 mt-0.5">מנהל</Badge>
+                      )}
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1.5 rounded-xl border-purple-300 text-purple-700 hover:bg-purple-50"
-                    onClick={() => {
-                      if (window.confirm(`להפוך את "${p.name}" למנהל? הוא יקבל גישה מלאה למערכת.`))
-                        promoteAdminMutation.mutate(p);
-                    }}
-                    disabled={promoteAdminMutation.isPending}
-                  >
-                    <Shield className="w-4 h-4" /> הפוך למנהל
-                  </Button>
+                  {p.user_id ? (
+                    p.role === 'admin' ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 rounded-xl text-muted-foreground"
+                        onClick={() => {
+                          if (window.confirm(`להחזיר את "${p.name}" לסוכן רגיל?`))
+                            demoteMutation.mutate(p);
+                        }}
+                        disabled={demoteMutation.isPending}
+                      >
+                        הורד לסוכן
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 rounded-xl border-purple-300 text-purple-700 hover:bg-purple-50"
+                        onClick={() => {
+                          if (window.confirm(`להפוך את "${p.name}" למנהל? הוא יקבל גישה מלאה למערכת.`))
+                            promoteAdminMutation.mutate(p);
+                        }}
+                        disabled={promoteAdminMutation.isPending}
+                      >
+                        <Shield className="w-4 h-4" /> הפוך למנהל
+                      </Button>
+                    )
+                  ) : (
+                    <Badge variant="outline" className="text-xs text-muted-foreground">אין חשבון</Badge>
+                  )}
                 </CardContent>
               </Card>
             ))}

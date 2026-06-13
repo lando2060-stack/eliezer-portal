@@ -36,6 +36,10 @@ function AgentsTab() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (dialog.id) return base44.entities.Agent.update(dialog.id, form);
+      if (form.email) {
+        const dup = agents.find(a => a.email?.toLowerCase() === form.email.toLowerCase());
+        if (dup) throw new Error(`כבר קיים סוכן עם מייל זה: ${dup.name}`);
+      }
       const res = await fetch('/api/invite-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
