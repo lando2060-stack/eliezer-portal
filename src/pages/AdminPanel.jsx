@@ -47,9 +47,20 @@ function AgentsTab() {
       });
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || 'שגיאה בשליחת הזמנה');
-      return base44.entities.Agent.create({ ...form, user_id: result.userId });
+      const agent = await base44.entities.Agent.create({ ...form, user_id: result.userId });
+      return { agent, alreadyExists: result.alreadyExists };
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['agents'] }); toast.success(dialog.id ? 'הסוכן עודכן' : 'הסוכן נוסף — הזמנה נשלחה למייל'); setDialog(null); },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['agents'] });
+      if (dialog.id) {
+        toast.success('הסוכן עודכן');
+      } else if (data?.alreadyExists) {
+        toast.success('הסוכן נוסף וחובר לחשבון קיים (לא נשלחה הזמנה חדשה)');
+      } else {
+        toast.success('הסוכן נוסף — הזמנה נשלחה למייל');
+      }
+      setDialog(null);
+    },
     onError: (err) => toast.error(err.message || 'שגיאה בשמירת הסוכן'),
   });
   const deleteMutation = useMutation({

@@ -335,7 +335,9 @@ function CatalogTab() {
 }
 
 // ---- Integrations Tab ----
-function IntegrationsTab() {
+function IntegrationsTab({ agentPerms = {} }) {
+  const canDrive = agentPerms.can_upload_drive !== false;
+  const canEmail = agentPerms.can_connect_email !== false;
   const [googleStatus, setGoogleStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [disconnecting, setDisconnecting] = useState(false);
@@ -426,12 +428,14 @@ function IntegrationsTab() {
 
   return (
     <div className="space-y-4 max-w-2xl">
-      <p className="text-sm text-muted-foreground">
-        חבר את חשבון Google שלך כדי לשמור קבלות ב-Drive ולסרוק קבלות שמגיעות למייל.
-      </p>
+      {(canDrive || canEmail) && (
+        <p className="text-sm text-muted-foreground">
+          חבר את חשבון Google שלך כדי לשמור קבלות ב-Drive ולסרוק קבלות שמגיעות למייל.
+        </p>
+      )}
 
       {/* Drive Mode (admin) */}
-      {googleStatus?.connected && (
+      {canDrive && googleStatus?.connected && (
         <Card className="rounded-2xl bg-muted/40">
           <CardContent className="p-4">
             <p className="text-xs font-semibold text-muted-foreground mb-3">הגדרות שמירת קבצים ב-Drive</p>
@@ -461,6 +465,7 @@ function IntegrationsTab() {
       )}
 
       {/* Google Drive */}
+      {canDrive && (
       <Card className="rounded-2xl">
         <CardContent className="p-5">
           <div className="flex items-center justify-between gap-4">
@@ -507,8 +512,10 @@ function IntegrationsTab() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Gmail */}
+      {canEmail && (
       <Card className="rounded-2xl">
         <CardContent className="p-5">
           <div className="flex items-center justify-between">
@@ -551,6 +558,13 @@ function IntegrationsTab() {
           </div>
         </CardContent>
       </Card>
+      )}
+      {!canDrive && !canEmail && (
+        <div className="text-center py-10 text-muted-foreground">
+          <p className="font-medium">הגישה לחיבורים לא מאופשרת</p>
+          <p className="text-sm mt-1">המנהל לא הפעיל אפשרות זו עבורך</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -888,8 +902,23 @@ export default function Settings() {
   const { user } = useCurrentUser();
   const admin = useIsAdminView();
   const [activeSection, setActiveSection] = useState(null);
+  const [agentPerms, setAgentPerms] = useState({ can_upload_drive: true, can_connect_email: true });
 
-  const visibleSections = Object.values(SETTINGS_SECTIONS).filter(s => !s.adminOnly || admin);
+  useEffect(() => {
+    if (!user || user.role === 'admin') return;
+    supabase.from('agents').select('permissions').eq('user_id', user.id).single()
+      .then(({ data }) => {
+        if (data?.permissions) setAgentPerms(p => ({ ...p, ...data.permissions }));
+      })
+      .catch(() => {});
+  }, [user]);
+
+  const hasIntegrations = agentPerms.can_upload_drive || agentPerms.can_connect_email;
+  const visibleSections = Object.values(SETTINGS_SECTIONS).filter(s => {
+    if (s.adminOnly && !admin) return false;
+    if (s.key === 'integrations' && !hasIntegrations) return false;
+    return true;
+  });
   const current = activeSection ? SETTINGS_SECTIONS[activeSection] : null;
 
   if (current) {
@@ -915,7 +944,7 @@ export default function Settings() {
         </div>
 
         {activeSection === 'profile' && <ProfileTab />}
-        {activeSection === 'integrations' && <IntegrationsTab />}
+        {activeSection === 'integrations' && <IntegrationsTab agentPerms={agentPerms} />}
         {activeSection === 'catalog' && admin && <CatalogTab />}
         {activeSection === 'permissions' && admin && <AgentPermissionsTab />}
       </div>

@@ -154,6 +154,7 @@ export default function UploadReceipt() {
           }
         } catch (vendorErr) {
           console.error('Vendor sync failed:', vendorErr?.message);
+          toast.error(`שגיאת ספק: ${vendorErr?.message}`);
         }
       }
 
