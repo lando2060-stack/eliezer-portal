@@ -260,30 +260,28 @@ export default function ReceiptReviewDialog({
         expense = await base44.entities.Expense.create(payload);
       }
 
-      // Non-blocking: update vendor stats (failures don't affect save)
+      // Sync vendor before returning so invalidateQueries in onSuccess sees the new vendor
       if (payload.vendor_name && !expenseId) {
-        Promise.resolve().then(async () => {
-          try {
-            const vendors = await base44.entities.Vendor.filter({ name: payload.vendor_name });
-            if (vendors.length > 0) {
-              await base44.entities.Vendor.update(vendors[0].id, {
-                receipt_count: (vendors[0].receipt_count || 0) + 1,
-                total_expenses: (vendors[0].total_expenses || 0) + (payload.total_amount || 0),
-                last_expense_date: payload.date || vendors[0].last_expense_date,
-                default_category: payload.category || vendors[0].default_category,
-              });
-            } else {
-              await base44.entities.Vendor.create({
-                name: payload.vendor_name,
-                tax_id: payload.vendor_tax_id || '',
-                default_category: payload.category || '',
-                receipt_count: 1,
-                total_expenses: payload.total_amount || 0,
-                last_expense_date: payload.date || null,
-              });
-            }
-          } catch (err) { console.error('vendor upsert failed:', err); }
-        });
+        try {
+          const vendors = await base44.entities.Vendor.filter({ name: payload.vendor_name });
+          if (vendors.length > 0) {
+            await base44.entities.Vendor.update(vendors[0].id, {
+              receipt_count: (vendors[0].receipt_count || 0) + 1,
+              total_expenses: (vendors[0].total_expenses || 0) + (payload.total_amount || 0),
+              last_expense_date: payload.date || vendors[0].last_expense_date || null,
+              default_category: payload.category || vendors[0].default_category,
+            });
+          } else {
+            await base44.entities.Vendor.create({
+              name: payload.vendor_name,
+              tax_id: payload.vendor_tax_id || '',
+              default_category: payload.category || '',
+              receipt_count: 1,
+              total_expenses: payload.total_amount || 0,
+              last_expense_date: payload.date || null,
+            });
+          }
+        } catch (err) { console.error('vendor upsert failed:', err); }
       }
 
       // Non-blocking: upload to Google Drive

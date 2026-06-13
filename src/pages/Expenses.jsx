@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, MoreVertical, Pencil, Trash2, Upload, Plus, CheckCircle, Download, PenLine, Mail, Sparkles, TrendingDown, Clock, Receipt, FileX, RefreshCw, Save, Loader2, FileSpreadsheet } from 'lucide-react';
+import { Search, MoreVertical, Pencil, Trash2, Upload, Plus, CheckCircle, Download, PenLine, Mail, Sparkles, TrendingDown, Clock, Receipt, FileX, RefreshCw, Save, Loader2, FileSpreadsheet, ScanLine } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import ReceiptReviewDialog from '@/components/ReceiptReviewDialog';
@@ -25,6 +25,7 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useIsAdminView } from '@/hooks/useIsAdminView';
 import ExpenseEditDialog from '@/components/expenses/ExpenseEditDialog';
 import ExcelImportDialog from '@/components/ExcelImportDialog';
+import { supabase } from '@/lib/supabase';
 
 // ── Recurring Expenses Tab ────────────────────────────────────
 function RecurringForm({ data, setData, onSubmit, isPending, submitLabel, categories }) {
@@ -248,6 +249,7 @@ export default function Expenses() {
   const [showReceiptDialog, setShowReceiptDialog] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const tableRef = useRef(null);
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -349,6 +351,32 @@ export default function Expenses() {
     finally { setExporting(false); }
   };
 
+  const handleScanGmail = async () => {
+    setScanning(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers = session ? { Authorization: `Bearer ${session.access_token}` } : {};
+      const res = await fetch('/api/google/scan-gmail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'שגיאה בסריקה');
+      if (data.created > 0) {
+        toast.success(`נמצאו ${data.found} מיילים — ${data.created} חשבוניות נוספו לחשבוניות ממייל`);
+        queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      } else if (data.found > 0) {
+        toast.info(`נמצאו ${data.found} מיילים אך לא זוהו קבצים חדשים`);
+      } else {
+        toast.info('לא נמצאו קבלות חדשות במייל (30 ימים אחרונים)');
+      }
+    } catch (err) {
+      toast.error(err.message || 'שגיאה בסריקת Gmail');
+    } finally {
+      setScanning(false);
+    }
+  };
+
   return (
     <div className="space-y-6" dir="rtl">
       <div className="flex items-center gap-3 flex-wrap">
@@ -356,6 +384,10 @@ export default function Expenses() {
           <h1 className="text-2xl font-bold">קבלות והוצאות</h1>
           <p className="text-muted-foreground text-sm mt-1">{filtered.length} הוצאות • סה״כ {formatCurrency(totalFiltered)}</p>
         </div>
+        <Button variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={handleScanGmail} disabled={scanning}>
+          {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <ScanLine className="w-4 h-4" />}
+          {scanning ? 'סורק...' : 'סרוק עכשיו'}
+        </Button>
         <Button variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={() => setShowImport(true)}>
           <FileSpreadsheet className="w-4 h-4" /> ייבוא מאקסל
         </Button>

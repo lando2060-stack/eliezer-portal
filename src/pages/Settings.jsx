@@ -452,7 +452,7 @@ function IntegrationsTab({ agentPerms = {} }) {
       )}
 
       {/* Drive Mode (admin only) */}
-      {isAdmin && googleStatus?.connected && (
+      {isAdmin && (
         <Card className="rounded-2xl bg-muted/40">
           <CardContent className="p-4">
             <p className="text-xs font-semibold text-muted-foreground mb-3">הגדרות שמירת קבצים ב-Drive</p>
