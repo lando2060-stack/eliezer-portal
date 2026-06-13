@@ -435,16 +435,16 @@ function IntegrationsTab({ agentPerms = {} }) {
   };
 
   const GoogleIcon = () => (
-    <svg className="w-4 h-4" viewBox="0 0 24 24">
-      <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-      <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-      <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-      <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+    <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24">
+      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
     </svg>
   );
 
   return (
-    <div className="space-y-4 max-w-2xl">
+    <div className="space-y-4 max-w-xl">
       {(canDrive || canEmail) && (
         <p className="text-sm text-muted-foreground">
           חבר את חשבון Google שלך כדי לשמור קבלות ב-Drive ולסרוק קבלות שמגיעות למייל.
@@ -453,7 +453,7 @@ function IntegrationsTab({ agentPerms = {} }) {
 
       {/* Drive Mode (admin only) */}
       {isAdmin && (
-        <Card className="rounded-2xl bg-muted/40">
+        <Card className="rounded-2xl bg-muted/30 border-dashed">
           <CardContent className="p-4">
             <p className="text-xs font-semibold text-muted-foreground mb-3">הגדרות שמירת קבצים ב-Drive</p>
             <div className="flex flex-col gap-2">
@@ -464,9 +464,9 @@ function IntegrationsTab({ agentPerms = {} }) {
                 <button
                   key={opt.value}
                   onClick={() => saveDriveMode(opt.value)}
-                  className={`flex items-center gap-3 p-3 rounded-xl border-2 text-right transition-all ${driveMode === opt.value ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'}`}
+                  className={`flex items-center gap-3 p-3 rounded-xl border-2 text-right transition-all ${driveMode === opt.value ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'}`}
                 >
-                  <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${driveMode === opt.value ? 'border-primary bg-primary' : 'border-muted-foreground'}`} />
+                  <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 transition-colors ${driveMode === opt.value ? 'border-primary bg-primary' : 'border-muted-foreground'}`} />
                   <div>
                     <p className="text-sm font-medium">{opt.label}</p>
                     <p className="text-xs text-muted-foreground">{opt.desc}</p>
@@ -480,99 +480,94 @@ function IntegrationsTab({ agentPerms = {} }) {
 
       {/* Google Drive */}
       {canDrive && (
-      <Card className="rounded-2xl">
-        <CardContent className="p-5">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center">
-                <HardDrive className="w-6 h-6 text-blue-500" />
+        <Card className="rounded-2xl shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
+                <HardDrive className="w-5 h-5 text-blue-500" />
               </div>
-              <div>
-                <div className="font-semibold flex items-center gap-2">
-                  Google Drive
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-sm">Google Drive</span>
                   {loading ? (
-                    <Badge variant="outline" className="text-xs text-muted-foreground">בודק...</Badge>
+                    <span className="text-xs text-muted-foreground">בודק...</span>
                   ) : googleStatus?.connected ? (
-                    <Badge className="text-xs bg-emerald-100 text-emerald-700 border-emerald-200">מחובר</Badge>
+                    <span className="text-xs text-emerald-600 font-medium bg-emerald-50 px-2 py-0.5 rounded-full">מחובר</span>
                   ) : (
-                    <Badge variant="outline" className="text-xs text-muted-foreground">לא מחובר</Badge>
+                    <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">לא מחובר</span>
                   )}
                 </div>
                 {googleStatus?.connected ? (
-                  <div className="mt-1 space-y-0.5">
-                    <p className="text-sm text-muted-foreground">{googleStatus.email}</p>
+                  <div className="mt-0.5 space-y-0.5">
+                    <p className="text-xs text-muted-foreground truncate">{googleStatus.email}</p>
                     <a href={googleStatus.folderUrl} target="_blank" rel="noopener noreferrer"
                       className="text-xs text-primary hover:underline">
-                      פתח תיקיית קבלות ב-Drive ↗
+                      פתח תיקיית קבלות ↗
                     </a>
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground mt-0.5">
-                    כל קבלה שתועלה תישמר אוטומטית ב-Drive שלך
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">כל קבלה תישמר אוטומטית ב-Drive שלך</p>
+                )}
+              </div>
+              <div className="flex-shrink-0">
+                {googleStatus?.connected ? (
+                  <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/5 hover:text-destructive"
+                    onClick={handleDisconnect} disabled={disconnecting}>
+                    נתק
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="outline" className="gap-2" onClick={handleConnect} disabled={loading}>
+                    <GoogleIcon /> התחבר עם Google
+                  </Button>
                 )}
               </div>
             </div>
-            {googleStatus?.connected ? (
-              <Button variant="outline" className="rounded-xl text-destructive border-destructive/30 hover:bg-destructive hover:text-white"
-                onClick={handleDisconnect} disabled={disconnecting}>
-                נתק
-              </Button>
-            ) : (
-              <Button className="rounded-xl gap-2" onClick={handleConnect} disabled={loading}>
-                <GoogleIcon /> התחבר עם Google
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
       )}
 
       {/* Gmail */}
       {canEmail && (
-      <Card className="rounded-2xl">
-        <CardContent className="p-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center">
-                <Mail className="w-6 h-6 text-red-400" />
+        <Card className="rounded-2xl shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
+                <Mail className="w-5 h-5 text-red-400" />
               </div>
-              <div>
-                <div className="font-semibold flex items-center gap-2">
-                  Gmail
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-sm">Gmail</span>
                   {loading ? (
-                    <Badge variant="outline" className="text-xs text-muted-foreground">בודק...</Badge>
+                    <span className="text-xs text-muted-foreground">בודק...</span>
                   ) : googleStatus?.connected ? (
-                    <Badge className="text-xs bg-emerald-100 text-emerald-700 border-emerald-200">מחובר</Badge>
+                    <span className="text-xs text-emerald-600 font-medium bg-emerald-50 px-2 py-0.5 rounded-full">מחובר</span>
                   ) : (
-                    <Badge variant="outline" className="text-xs text-muted-foreground">לא מחובר</Badge>
+                    <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">לא מחובר</span>
                   )}
                 </div>
                 {googleStatus?.connected ? (
-                  <p className="text-sm text-muted-foreground mt-0.5">{googleStatus.email}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 truncate">{googleStatus.email}</p>
                 ) : (
-                  <p className="text-sm text-muted-foreground mt-0.5">סריקה אוטומטית של קבלות שמגיעות למייל</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">סריקה אוטומטית של קבלות שמגיעות למייל</p>
+                )}
+              </div>
+              <div className="flex-shrink-0">
+                {googleStatus?.connected ? (
+                  <Button size="sm" className="gap-2" onClick={handleScanGmail} disabled={scanning}>
+                    {scanning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                    {scanning ? 'סורק...' : 'סרוק עכשיו'}
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="outline" className="gap-2" onClick={handleConnect} disabled={loading}>
+                    <GoogleIcon /> התחבר
+                  </Button>
                 )}
               </div>
             </div>
-            {googleStatus?.connected ? (
-              <Button
-                className="rounded-xl gap-2"
-                onClick={handleScanGmail}
-                disabled={scanning}
-              >
-                {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                {scanning ? 'סורק...' : 'סרוק עכשיו'}
-              </Button>
-            ) : (
-              <Button className="rounded-xl gap-2" onClick={handleConnect} disabled={loading}>
-                <GoogleIcon /> התחבר
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
       )}
+
       {!canDrive && !canEmail && (
         <div className="text-center py-10 text-muted-foreground">
           <p className="font-medium">הגישה לחיבורים לא מאופשרת</p>
@@ -875,7 +870,7 @@ const SETTINGS_SECTIONS = {
   profile: {
     key: 'profile',
     title: 'פרופיל',
-    desc: 'שם, לוגו, סיסמה',
+    desc: 'שם, סיסמה',
     icon: User,
     iconBg: 'bg-blue-50',
     iconColor: 'text-blue-500',
