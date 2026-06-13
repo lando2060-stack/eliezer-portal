@@ -131,25 +131,29 @@ export default function UploadReceipt() {
 
       // Update or create vendor
       if (data.vendor_name) {
-        const vendors = await base44.entities.Vendor.filter({ name: data.vendor_name });
-        if (vendors.length > 0) {
-          await base44.entities.Vendor.update(vendors[0].id, {
-            receipt_count: (vendors[0].receipt_count || 0) + 1,
-            total_expenses: (vendors[0].total_expenses || 0) + (data.total_amount || 0),
-            last_expense_date: data.date,
-            default_category: data.category || vendors[0].default_category,
-          });
-        } else {
-          await base44.entities.Vendor.create({
-            name: data.vendor_name,
-            tax_id: data.vendor_tax_id || '',
-            default_category: data.category || '',
-            receipt_count: 1,
-            total_expenses: data.total_amount || 0,
-            last_expense_date: data.date,
-            address: data.vendor_address || '',
-            phone: data.vendor_phone || '',
-          });
+        try {
+          const vendors = await base44.entities.Vendor.filter({ name: data.vendor_name });
+          if (vendors.length > 0) {
+            await base44.entities.Vendor.update(vendors[0].id, {
+              receipt_count: (vendors[0].receipt_count || 0) + 1,
+              total_expenses: (vendors[0].total_expenses || 0) + (data.total_amount || 0),
+              last_expense_date: data.date || null,
+              default_category: data.category || vendors[0].default_category,
+            });
+          } else {
+            await base44.entities.Vendor.create({
+              name: data.vendor_name,
+              tax_id: data.vendor_tax_id || '',
+              default_category: data.category || '',
+              receipt_count: 1,
+              total_expenses: data.total_amount || 0,
+              last_expense_date: data.date || null,
+              address: data.vendor_address || '',
+              phone: data.vendor_phone || '',
+            });
+          }
+        } catch (vendorErr) {
+          console.error('Vendor sync failed:', vendorErr?.message);
         }
       }
 

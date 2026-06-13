@@ -100,10 +100,16 @@ create policy "payments_delete" on payments for delete to authenticated
 
 -- ── שאר הטבלאות — כל מאומת יכול לקרוא, אדמין בלבד כותב ──
 
--- Vendors
+-- Vendors — agents can create/update (auto-sync from receipts); only admins can delete
+drop policy if exists "vendors_write" on vendors;
+drop policy if exists "vendors_select" on vendors;
+drop policy if exists "vendors_insert" on vendors;
+drop policy if exists "vendors_update" on vendors;
+drop policy if exists "vendors_delete" on vendors;
 create policy "vendors_select" on vendors for select to authenticated using (true);
-create policy "vendors_write" on vendors for all to authenticated
-  using (is_admin()) with check (is_admin());
+create policy "vendors_insert" on vendors for insert to authenticated with check (true);
+create policy "vendors_update" on vendors for update to authenticated using (true) with check (true);
+create policy "vendors_delete" on vendors for delete to authenticated using (is_admin());
 
 -- Recurring Expenses
 create policy "recurring_select" on recurring_expenses for select to authenticated using (true);

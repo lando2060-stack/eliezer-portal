@@ -12,7 +12,7 @@ export default function AgentLayout() {
     <div className="min-h-screen bg-background">
       <div className="sticky top-0 z-40 bg-white border-b border-border">
         <div className="flex items-center justify-between px-4 py-2 max-w-5xl mx-auto">
-          <img src="/logo.webp" alt="אליעזר נכסים" className="h-7 object-contain" />
+          <div />
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
