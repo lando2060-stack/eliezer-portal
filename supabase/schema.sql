@@ -8,8 +8,11 @@ create table if not exists profiles (
   full_name  text not null default '',
   phone      text not null default '',
   role       text not null default 'agent' check (role in ('admin', 'agent')),
+  drive_mode text not null default 'personal' check (drive_mode in ('personal', 'central')),
   created_at timestamptz not null default now()
 );
+-- Migration for existing DBs:
+-- alter table profiles add column if not exists drive_mode text not null default 'personal' check (drive_mode in ('personal', 'central'));
 
 -- Auto-create profile on signup
 create or replace function handle_new_user()

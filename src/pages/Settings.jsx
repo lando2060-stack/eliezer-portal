@@ -336,8 +336,11 @@ function CatalogTab() {
 
 // ---- Integrations Tab ----
 function IntegrationsTab({ agentPerms = {} }) {
-  const canDrive = agentPerms.can_upload_drive !== false;
-  const canEmail = agentPerms.can_connect_email !== false;
+  const { user } = useCurrentUser();
+  const isAdmin = user?.role === 'admin';
+  const [driveMode, setDriveMode] = useState('personal');
+  const canDrive = isAdmin || driveMode === 'personal';
+  const canEmail = isAdmin || agentPerms.can_connect_email !== false;
   const [googleStatus, setGoogleStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [disconnecting, setDisconnecting] = useState(false);
@@ -374,6 +377,20 @@ function IntegrationsTab({ agentPerms = {} }) {
       window.history.replaceState({}, '', '/settings');
     }
   }, []);
+
+  useEffect(() => {
+    supabase.from('profiles').select('drive_mode').eq('role', 'admin').limit(1).single()
+      .then(({ data }) => { if (data?.drive_mode) setDriveMode(data.drive_mode); })
+      .catch(() => {});
+  }, []);
+
+  const saveDriveMode = async (mode) => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return;
+    await supabase.from('profiles').update({ drive_mode: mode }).eq('id', authUser.id);
+    setDriveMode(mode);
+    toast.success('ההגדרה נשמרה');
+  };
 
   const handleConnect = async () => {
     const headers = await getAuthHeaders();
@@ -434,8 +451,8 @@ function IntegrationsTab({ agentPerms = {} }) {
         </p>
       )}
 
-      {/* Drive Mode (admin) */}
-      {canDrive && googleStatus?.connected && (
+      {/* Drive Mode (admin only) */}
+      {isAdmin && googleStatus?.connected && (
         <Card className="rounded-2xl bg-muted/40">
           <CardContent className="p-4">
             <p className="text-xs font-semibold text-muted-foreground mb-3">הגדרות שמירת קבצים ב-Drive</p>
@@ -443,22 +460,19 @@ function IntegrationsTab({ agentPerms = {} }) {
               {[
                 { value: 'personal', label: 'דרייב אישי לכל סוכן', desc: 'כל סוכן מחבר את הדרייב שלו' },
                 { value: 'central', label: 'דרייב מרכזי של המשרד', desc: 'כל הקבלות נשמרות בדרייב אחד' },
-              ].map(opt => {
-                const driveMode = localStorage.getItem('drive_mode') || 'personal';
-                return (
-                  <button
-                    key={opt.value}
-                    onClick={() => { localStorage.setItem('drive_mode', opt.value); toast.success('ההגדרה נשמרה'); }}
-                    className={`flex items-center gap-3 p-3 rounded-xl border-2 text-right transition-all ${driveMode === opt.value ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'}`}
-                  >
-                    <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${driveMode === opt.value ? 'border-primary bg-primary' : 'border-muted-foreground'}`} />
-                    <div>
-                      <p className="text-sm font-medium">{opt.label}</p>
-                      <p className="text-xs text-muted-foreground">{opt.desc}</p>
-                    </div>
-                  </button>
-                );
-              })}
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => saveDriveMode(opt.value)}
+                  className={`flex items-center gap-3 p-3 rounded-xl border-2 text-right transition-all ${driveMode === opt.value ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'}`}
+                >
+                  <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${driveMode === opt.value ? 'border-primary bg-primary' : 'border-muted-foreground'}`} />
+                  <div>
+                    <p className="text-sm font-medium">{opt.label}</p>
+                    <p className="text-xs text-muted-foreground">{opt.desc}</p>
+                  </div>
+                </button>
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -571,13 +585,12 @@ function IntegrationsTab({ agentPerms = {} }) {
 
 // ---- Agent Permissions Tab (admin only) ----
 const AGENT_PERMISSION_DEFS = [
-  { key: 'can_upload_drive', label: 'העלאה לדרייב האישי', desc: 'יכול להעלות קבלות לדרייב שלו' },
   { key: 'can_connect_email', label: 'חיבור מייל אישי', desc: 'יכול לחבר את ה-Gmail שלו' },
   { key: 'can_add_deal', label: 'הוספת עסקה', desc: 'יכול לפתוח עסקה חדשה' },
   { key: 'can_add_expense', label: 'הוספת הוצאה', desc: 'יכול להוסיף הוצאה' },
   { key: 'can_add_income', label: 'הוספת הכנסה', desc: 'יכול לרשום הכנסה' },
 ];
-const PERM_DEFAULTS = { can_upload_drive: true, can_connect_email: true, can_add_deal: true, can_add_expense: true, can_add_income: true };
+const PERM_DEFAULTS = { can_connect_email: true, can_add_deal: true, can_add_expense: true, can_add_income: true };
 
 function AgentPermissionsTab() {
   const queryClient = useQueryClient();
@@ -902,7 +915,7 @@ export default function Settings() {
   const { user } = useCurrentUser();
   const admin = useIsAdminView();
   const [activeSection, setActiveSection] = useState(null);
-  const [agentPerms, setAgentPerms] = useState({ can_upload_drive: true, can_connect_email: true });
+  const [agentPerms, setAgentPerms] = useState({ can_connect_email: true });
 
   useEffect(() => {
     if (!user || user.role === 'admin') return;
@@ -913,12 +926,7 @@ export default function Settings() {
       .catch(() => {});
   }, [user]);
 
-  const hasIntegrations = agentPerms.can_upload_drive || agentPerms.can_connect_email;
-  const visibleSections = Object.values(SETTINGS_SECTIONS).filter(s => {
-    if (s.adminOnly && !admin) return false;
-    if (s.key === 'integrations' && !hasIntegrations) return false;
-    return true;
-  });
+  const visibleSections = Object.values(SETTINGS_SECTIONS).filter(s => !s.adminOnly || admin);
   const current = activeSection ? SETTINGS_SECTIONS[activeSection] : null;
 
   if (current) {
