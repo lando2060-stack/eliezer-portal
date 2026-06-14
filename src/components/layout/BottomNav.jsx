@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, FileText, Receipt, Plus, X, TrendingUp, LogOut } from 'lucide-react';
+import { LayoutDashboard, FileText, Receipt, Plus, X, TrendingUp } from 'lucide-react';
 import ReceiptReviewDialog from '@/components/ReceiptReviewDialog';
 import { useAgentPermissions } from '@/hooks/useAgentPermissions';
-import { base44 } from '@/api/base44Client';
 
 const navItems = [
-  { path: '/',      label: 'דשבורד', icon: LayoutDashboard },
-  { path: '/deals', label: 'עסקאות', icon: FileText },
-  { path: '/',      label: '',        icon: LayoutDashboard },
-  { path: null,     label: 'יציאה',  icon: LogOut, logout: true },
+  { path: '/',         label: 'דשבורד',  icon: LayoutDashboard },
+  { path: '/deals',    label: 'עסקאות',  icon: FileText },
+  { path: '/',         label: '',         icon: LayoutDashboard },
+  { path: '/expenses', label: 'הוצאות',  icon: Receipt },
 ];
 
 const ALL_FAB_ACTIONS = [
@@ -96,19 +95,6 @@ export default function BottomNav() {
                     {fabOpen ? <X className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
                   </button>
                 </div>
-              );
-            }
-
-            if (item.logout) {
-              return (
-                <button
-                  key="logout"
-                  onClick={() => base44.auth.logout()}
-                  className="flex flex-col items-center gap-1 px-3 py-1 rounded-xl transition-colors text-muted-foreground"
-                >
-                  <item.icon className="w-5 h-5" />
-                  <span className="text-xs">{item.label}</span>
-                </button>
               );
             }
 
