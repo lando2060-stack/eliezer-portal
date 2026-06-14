@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, MoreVertical, Pencil, Trash2, Upload, Plus, Download, PenLine, Mail, Sparkles, TrendingDown, Receipt, FileX, RefreshCw, Save, Loader2, FileSpreadsheet, ScanLine, CalendarDays } from 'lucide-react';
+import { Search, MoreVertical, Pencil, Trash2, Upload, Plus, Download, PenLine, Mail, Sparkles, TrendingDown, Receipt, FileX, Loader2, FileSpreadsheet, ScanLine, CalendarDays } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import ReceiptReviewDialog from '@/components/ReceiptReviewDialog';
@@ -28,124 +28,7 @@ import ExpenseEditDialog from '@/components/expenses/ExpenseEditDialog';
 import ExcelImportDialog from '@/components/ExcelImportDialog';
 import { supabase } from '@/lib/supabase';
 
-// ── Recurring Expenses Tab ────────────────────────────────────
-function RecurringForm({ data, setData, onSubmit, isPending, submitLabel, categories }) {
-  return (
-    <div className="space-y-3">
-      <div className="space-y-1"><Label className="text-xs">שם *</Label><Input value={data.name} onChange={e => setData(p => ({ ...p, name: e.target.value }))} className="rounded-xl" /></div>
-      <div className="space-y-1"><Label className="text-xs">ספק</Label><Input value={data.vendor_name} onChange={e => setData(p => ({ ...p, vendor_name: e.target.value }))} className="rounded-xl" /></div>
-      <div className="space-y-1"><Label className="text-xs">סכום *</Label><Input type="number" value={data.amount} onChange={e => setData(p => ({ ...p, amount: e.target.value }))} className="rounded-xl" /></div>
-      <div className="space-y-1">
-        <Label className="text-xs">קטגוריה</Label>
-        <Select value={data.category} onValueChange={v => setData(p => ({ ...p, category: v }))}>
-          <SelectTrigger className="rounded-xl"><SelectValue placeholder="בחר" /></SelectTrigger>
-          <SelectContent>{categories.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
-        </Select>
-      </div>
-      <div className="space-y-1">
-        <Label className="text-xs">אמצעי תשלום</Label>
-        <Select value={data.payment_method} onValueChange={v => setData(p => ({ ...p, payment_method: v }))}>
-          <SelectTrigger className="rounded-xl"><SelectValue placeholder="בחר" /></SelectTrigger>
-          <SelectContent>{Object.entries(PAYMENT_METHODS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
-        </Select>
-      </div>
-      <div className="space-y-1"><Label className="text-xs">יום בחודש</Label><Input type="number" min="1" max="31" value={data.day_of_month} onChange={e => setData(p => ({ ...p, day_of_month: parseInt(e.target.value) || 1 }))} className="rounded-xl" /></div>
-      <Button onClick={onSubmit} disabled={!data.name || !data.amount || isPending} className="w-full gap-2 rounded-xl">{submitLabel}</Button>
-    </div>
-  );
-}
 
-function RecurringExpensesTab() {
-  const queryClient = useQueryClient();
-  const { data: recurring = [] } = useQuery({ queryKey: ['recurring'], queryFn: () => base44.entities.RecurringExpense.list() });
-  const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: () => base44.entities.Category.list() });
-
-  const empty = { name: '', vendor_name: '', amount: '', category: '', payment_method: '', day_of_month: 1, is_active: true };
-  const [newR, setNewR] = useState(null);
-  const [editR, setEditR] = useState(null);
-
-  const createR = useMutation({
-    mutationFn: (d) => base44.entities.RecurringExpense.create({ ...d, amount: parseFloat(d.amount) || 0 }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['recurring'] }); toast.success('נוצרה הוצאה קבועה'); setNewR(null); },
-    onError: () => toast.error('שגיאה ביצירת הוצאה קבועה'),
-  });
-  const updateR = useMutation({
-    mutationFn: ({ id, ...d }) => base44.entities.RecurringExpense.update(id, { ...d, amount: parseFloat(d.amount) || 0 }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['recurring'] }); toast.success('עודכנה'); setEditR(null); },
-    onError: () => toast.error('שגיאה בעדכון'),
-  });
-  const deleteR = useMutation({
-    mutationFn: (id) => base44.entities.RecurringExpense.delete(id),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['recurring'] }); toast.success('נמחקה'); },
-    onError: () => toast.error('שגיאה במחיקה'),
-  });
-  const toggleR = useMutation({
-    mutationFn: ({ id, is_active }) => base44.entities.RecurringExpense.update(id, { is_active }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['recurring'] }),
-    onError: () => toast.error('שגיאה בעדכון הסטטוס'),
-  });
-
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button onClick={() => setNewR(empty)} className="gap-2 rounded-xl"><Plus className="w-4 h-4" /> הוצאה קבועה חדשה</Button>
-      </div>
-
-      <Dialog open={!!newR} onOpenChange={() => setNewR(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>הוספת הוצאה קבועה</DialogTitle></DialogHeader>
-          {newR && <RecurringForm data={newR} setData={setNewR} onSubmit={() => createR.mutate(newR)} isPending={createR.isPending} submitLabel={<><Plus className="w-4 h-4" /> הוסף</>} categories={categories} />}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!editR} onOpenChange={() => setEditR(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>עריכת הוצאה קבועה</DialogTitle></DialogHeader>
-          {editR && <RecurringForm data={editR} setData={setEditR} onSubmit={() => updateR.mutate(editR)} isPending={updateR.isPending} submitLabel={<><Save className="w-4 h-4" /> שמור שינויים</>} categories={categories} />}
-        </DialogContent>
-      </Dialog>
-
-      <Card className="rounded-2xl overflow-hidden">
-        <Table>
-          <TableHeader><TableRow className="bg-muted/50">
-            <TableHead className="w-12"></TableHead>
-            <TableHead className="text-right">שם</TableHead>
-            <TableHead className="text-right">ספק</TableHead>
-            <TableHead className="text-right">סכום</TableHead>
-            <TableHead className="text-right">קטגוריה</TableHead>
-            <TableHead className="text-right">יום</TableHead>
-            <TableHead className="text-right">פעיל</TableHead>
-          </TableRow></TableHeader>
-          <TableBody>
-            {recurring.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">אין הוצאות קבועות</TableCell></TableRow>
-            ) : recurring.map(r => (
-              <TableRow key={r.id}>
-                <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="w-4 h-4" /></Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start">
-                      <DropdownMenuItem onClick={() => setEditR({ ...r, amount: r.amount?.toString() ?? '' })}><Pencil className="w-4 h-4 ml-2" /> עריכה</DropdownMenuItem>
-                      <DropdownMenuItem className="text-destructive" onClick={() => { if (window.confirm(`למחוק את "${r.name}"?`)) deleteR.mutate(r.id); }}><Trash2 className="w-4 h-4 ml-2" /> מחיקה</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-                <TableCell className="font-medium">{r.name}</TableCell>
-                <TableCell>{r.vendor_name || '-'}</TableCell>
-                <TableCell>₪{r.amount?.toLocaleString()}</TableCell>
-                <TableCell>{r.category || '-'}</TableCell>
-                <TableCell>{r.day_of_month}</TableCell>
-                <TableCell><Switch checked={r.is_active} onCheckedChange={v => toggleR.mutate({ id: r.id, is_active: v })} /></TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Card>
-    </div>
-  );
-}
 
 // ── Gmail Inbox Tab ───────────────────────────────────────────
 function GmailInboxTab({ inboxExpenses, isLoading, onDelete, isAdminView }) {
@@ -306,8 +189,12 @@ export default function Expenses() {
   // Annual total (no VAT) — all expenses in the selected year
   const currentYear = filterMode === 'year' ? filterYear : filterMonth?.slice(0, 4) || filterFromMonth?.slice(0, 4) || THIS_YEAR;
   const annualExpenses = useMemo(() =>
-    expenses.filter(e => e.date?.slice(0, 4) === currentYear),
-    [expenses, currentYear]
+    expenses.filter(e => {
+      const matchYear = e.date?.slice(0, 4) === currentYear;
+      const matchAgent = agentFilter === 'all' || e.agent_id === agentFilter;
+      return matchYear && matchAgent;
+    }),
+    [expenses, currentYear, agentFilter]
   );
 
   const expenseStats = useMemo(() => ({
@@ -450,17 +337,41 @@ export default function Expenses() {
               <span className="ms-1 bg-violet-600 text-white text-xs rounded-full px-1.5 py-0.5 leading-none">{gmailInbox.length}</span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="recurring" className="gap-2 rounded-lg">
-            <RefreshCw className="w-4 h-4" /> הוצאות קבועות
-          </TabsTrigger>
+
         </TabsList>
 
         {/* ── הוצאות Tab ── */}
         <TabsContent value="expenses" className="mt-4 space-y-4">
           <Card className="rounded-2xl">
             <CardContent className="p-4 space-y-3">
-              <div className="flex flex-wrap gap-3">
-                <div className="relative flex-1 min-w-[200px]">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex rounded-xl border overflow-hidden shrink-0">
+                  {[['month', 'חודש'], ['range', 'טווח'], ['year', 'שנה']].map(([mode, label]) => (
+                    <button key={mode} onClick={() => setFilterMode(mode)}
+                      className={`px-3 py-1.5 text-xs font-medium transition-colors ${filterMode === mode ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {filterMode === 'month' && (
+                  <Input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="w-36 rounded-xl shrink-0" />
+                )}
+                {filterMode === 'range' && (
+                  <>
+                    <Input type="month" value={filterFromMonth} onChange={e => setFilterFromMonth(e.target.value)} className="w-36 rounded-xl shrink-0" />
+                    <span className="text-muted-foreground text-sm">—</span>
+                    <Input type="month" value={filterToMonth} onChange={e => setFilterToMonth(e.target.value)} className="w-36 rounded-xl shrink-0" />
+                  </>
+                )}
+                {filterMode === 'year' && (
+                  <Select value={filterYear} onValueChange={setFilterYear}>
+                    <SelectTrigger className="w-32 rounded-xl shrink-0"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+                <div className="relative flex-1 min-w-[160px]">
                   <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input placeholder="חיפוש ספק, קטגוריה..." value={search} onChange={e => setSearch(e.target.value)} className="pr-9 rounded-xl" />
                 </div>
@@ -470,36 +381,6 @@ export default function Expenses() {
                     <SelectContent>
                       <SelectItem value="all">כל הסוכנים</SelectItem>
                       {agents.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-
-              {/* Date filters */}
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex rounded-xl border overflow-hidden">
-                  {[['month', 'חודש'], ['range', 'טווח'], ['year', 'שנה']].map(([mode, label]) => (
-                    <button key={mode} onClick={() => setFilterMode(mode)}
-                      className={`px-3 py-1.5 text-xs font-medium transition-colors ${filterMode === mode ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                {filterMode === 'month' && (
-                  <Input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="w-36 rounded-xl" />
-                )}
-                {filterMode === 'range' && (
-                  <>
-                    <Input type="month" value={filterFromMonth} onChange={e => setFilterFromMonth(e.target.value)} className="w-36 rounded-xl" />
-                    <span className="text-muted-foreground text-sm">—</span>
-                    <Input type="month" value={filterToMonth} onChange={e => setFilterToMonth(e.target.value)} className="w-36 rounded-xl" />
-                  </>
-                )}
-                {filterMode === 'year' && (
-                  <Select value={filterYear} onValueChange={setFilterYear}>
-                    <SelectTrigger className="w-32 rounded-xl"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 )}
@@ -580,10 +461,7 @@ export default function Expenses() {
           />
         </TabsContent>
 
-        {/* ── הוצאות קבועות Tab ── */}
-        <TabsContent value="recurring" className="mt-4">
-          <RecurringExpensesTab />
-        </TabsContent>
+
       </Tabs>
 
       {/* View Dialog */}

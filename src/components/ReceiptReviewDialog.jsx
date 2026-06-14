@@ -512,8 +512,8 @@ export default function ReceiptReviewDialog({
                     <Input className="h-8 text-sm" type="date" value={extractedData.date || ''} onChange={e => upd('date', e.target.value)} />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">מספר קבלה</Label>
-                    <Input className="h-8 text-sm" value={extractedData.receipt_number || ''} onChange={e => upd('receipt_number', e.target.value)} />
+                    <Label className="text-xs">מספר חשבונית</Label>
+                    <Input className="h-8 text-sm" value={extractedData.invoice_number || ''} onChange={e => upd('invoice_number', e.target.value)} />
                   </div>
                 </div>
 
@@ -549,23 +549,17 @@ export default function ReceiptReviewDialog({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs">מטבע</Label>
-                    <Select value={extractedData.currency || 'ILS'} onValueChange={v => upd('currency', v)}>
-                      <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ILS">₪ שקל</SelectItem>
-                        <SelectItem value="USD">$ דולר</SelectItem>
-                        <SelectItem value="EUR">€ יורו</SelectItem>
-                        <SelectItem value="GBP">£ ליש״ט</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">מספר חשבונית</Label>
-                    <Input className="h-8 text-sm" value={extractedData.invoice_number || ''} onChange={e => upd('invoice_number', e.target.value)} />
-                  </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">מטבע</Label>
+                  <Select value={extractedData.currency || 'ILS'} onValueChange={v => upd('currency', v)}>
+                    <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ILS">₪ שקל</SelectItem>
+                      <SelectItem value="USD">$ דולר</SelectItem>
+                      <SelectItem value="EUR">€ יורו</SelectItem>
+                      <SelectItem value="GBP">£ ליש״ט</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {isAdminView && agents.length > 0 && (

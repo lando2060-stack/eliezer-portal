@@ -22,6 +22,7 @@ import * as XLSX from 'xlsx';
 const formatShort = (v) => `₪${(v / 1000).toFixed(0)}k`;
 
 const THIS_MONTH = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+const THIS_YEAR = String(new Date().getFullYear());
 
 
 function KpiCard({ label, value, sub, icon: Icon, color }) {
@@ -43,8 +44,11 @@ function KpiCard({ label, value, sub, icon: Icon, color }) {
 
 export default function FinancialReports() {
   const printRef = useRef(null);
-  const [dateFrom, setDateFrom] = useState(THIS_MONTH);
-  const [dateTo, setDateTo]     = useState(THIS_MONTH);
+  const [filterMode, setFilterMode] = useState('month');
+  const [filterMonth, setFilterMonth] = useState(THIS_MONTH);
+  const [filterFromMonth, setFilterFromMonth] = useState(THIS_MONTH);
+  const [filterToMonth, setFilterToMonth] = useState(THIS_MONTH);
+  const [filterYear, setFilterYear] = useState(THIS_YEAR);
   const [agentFilter, setAgentFilter] = useState('all');
 
   const { data: agents   = [] } = useQuery({ queryKey: ['agents'],   queryFn: () => base44.entities.Agent.list() });
@@ -53,30 +57,35 @@ export default function FinancialReports() {
 
   const inRange = (month) => {
     if (!month) return false;
-    if (dateFrom && month < dateFrom) return false;
-    if (dateTo   && month > dateTo)   return false;
+    const y = month.slice(0, 4);
+    if (filterMode === 'month') return month === filterMonth;
+    if (filterMode === 'range') return month >= filterFromMonth && month <= filterToMonth;
+    if (filterMode === 'year') return y === filterYear;
     return true;
   };
 
   const inDateRange = (dateStr) => {
     if (!dateStr) return false;
-    const m = dateStr.slice(0, 7);
-    if (dateFrom && m < dateFrom) return false;
-    if (dateTo   && m > dateTo)   return false;
-    return true;
+    return inRange(dateStr.slice(0, 7));
   };
 
   const deals = useMemo(() => {
     let d = allDeals.filter(x => inRange(x.month));
     if (agentFilter !== 'all') d = d.filter(x => x.agent_id === agentFilter);
     return d;
-  }, [allDeals, dateFrom, dateTo, agentFilter]);
+  }, [allDeals, filterMode, filterMonth, filterFromMonth, filterToMonth, filterYear, agentFilter]);
 
   const expenses = useMemo(() => {
     let e = allExpenses.filter(x => inDateRange(x.date));
     if (agentFilter !== 'all') e = e.filter(x => x.agent_id === agentFilter);
     return e;
-  }, [allExpenses, dateFrom, dateTo, agentFilter]);
+  }, [allExpenses, filterMode, filterMonth, filterFromMonth, filterToMonth, filterYear, agentFilter]);
+
+  const availableYears = useMemo(() => {
+    const years = [...new Set(allDeals.map(d => d.month?.slice(0, 4)).filter(Boolean))].sort().reverse();
+    if (!years.includes(THIS_YEAR)) years.unshift(THIS_YEAR);
+    return years;
+  }, [allDeals]);
 
   // ── KPIs ─────────────────────────────────────────────────
   const kpi = useMemo(() => {
@@ -96,11 +105,7 @@ export default function FinancialReports() {
       ...allDeals.map(d => d.month).filter(Boolean),
       ...allExpenses.map(e => e.date?.slice(0, 7)).filter(Boolean),
     ]);
-    return [...months].sort().filter(m => {
-      if (dateFrom && m < dateFrom) return false;
-      if (dateTo   && m > dateTo)   return false;
-      return true;
-    }).map(m => {
+    return [...months].sort().filter(m => inRange(m)).map(m => {
       const mDeals = deals.filter(d => d.month === m);
       const mExp   = expenses.filter(e => e.date?.slice(0, 7) === m && e.status !== 'rejected');
       return {
@@ -109,7 +114,7 @@ export default function FinancialReports() {
         הוצאות: Math.round(mExp.reduce((s, e) => s + (e.total_amount || 0), 0)),
       };
     });
-  }, [deals, expenses, dateFrom, dateTo]);
+  }, [deals, expenses, filterMode, filterMonth, filterFromMonth, filterToMonth, filterYear]);
 
   // ── Per-agent table ──────────────────────────────────────
   const agentRows = useMemo(() => {
@@ -191,7 +196,8 @@ export default function FinancialReports() {
     ];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(catData), 'הוצאות לפי קטגוריה');
 
-    XLSX.writeFile(wb, `דוחות_${dateFrom || 'כל'}_${dateTo || 'הזמנים'}.xlsx`);
+    const label = filterMode === 'year' ? filterYear : filterMode === 'month' ? filterMonth : `${filterFromMonth}_${filterToMonth}`;
+    XLSX.writeFile(wb, `דוחות_${label}.xlsx`);
   };
 
   const handlePrint = () => window.print();
@@ -222,10 +228,32 @@ export default function FinancialReports() {
             </Select>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <span className="text-xs text-muted-foreground whitespace-nowrap">טווח תאריכים:</span>
-            <Input type="month" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-36 rounded-xl" />
-            <span className="text-muted-foreground text-sm">—</span>
-            <Input type="month" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-36 rounded-xl" />
+            <div className="flex rounded-xl border overflow-hidden">
+              {[['month', 'חודש'], ['range', 'טווח'], ['year', 'שנה']].map(([mode, label]) => (
+                <button key={mode} onClick={() => setFilterMode(mode)}
+                  className={`px-3 py-1.5 text-xs font-medium transition-colors ${filterMode === mode ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {filterMode === 'month' && (
+              <Input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="w-36 rounded-xl" />
+            )}
+            {filterMode === 'range' && (
+              <>
+                <Input type="month" value={filterFromMonth} onChange={e => setFilterFromMonth(e.target.value)} className="w-36 rounded-xl" />
+                <span className="text-muted-foreground text-sm">—</span>
+                <Input type="month" value={filterToMonth} onChange={e => setFilterToMonth(e.target.value)} className="w-36 rounded-xl" />
+              </>
+            )}
+            {filterMode === 'year' && (
+              <Select value={filterYear} onValueChange={setFilterYear}>
+                <SelectTrigger className="w-32 rounded-xl"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
             <div className="flex gap-2 mr-auto">
               <Button variant="outline" size="sm" onClick={exportExcel} className="gap-1.5 rounded-xl">
                 <Download className="w-4 h-4" /> Excel

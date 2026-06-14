@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/constants';
 
@@ -25,6 +25,7 @@ function statusBadge(agent) {
 export default function Agents() {
   const [dialog, setDialog] = useState(null);
   const [form, setForm] = useState(EMPTY);
+  const [search, setSearch] = useState('');
   const queryClient = useQueryClient();
 
   const { data: agents = [], isLoading } = useQuery({
@@ -36,6 +37,16 @@ export default function Agents() {
     queryKey: ['deals'],
     queryFn: () => base44.entities.Deal.list('-created_date', 500),
   });
+
+  const filteredAgents = useMemo(() => {
+    if (!search.trim()) return agents;
+    const q = search.toLowerCase();
+    return agents.filter(a =>
+      a.name?.toLowerCase().includes(q) ||
+      a.email?.toLowerCase().includes(q) ||
+      a.phone?.includes(q)
+    );
+  }, [agents, search]);
 
   const agentStats = useMemo(() => {
     const map = {};
@@ -109,6 +120,16 @@ export default function Agents() {
         </Button>
       </div>
 
+      <div className="relative max-w-sm">
+        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+        <Input
+          placeholder="חיפוש לפי שם, מייל או טלפון..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="pr-9 rounded-xl"
+        />
+      </div>
+
       {/* Agents table */}
       <Card className="rounded-2xl overflow-hidden">
         <Table>
@@ -129,9 +150,9 @@ export default function Agents() {
           <TableBody>
             {isLoading ? (
               <TableRow><TableCell colSpan={10} className="text-center py-12 text-muted-foreground">טוען...</TableCell></TableRow>
-            ) : agents.length === 0 ? (
-              <TableRow><TableCell colSpan={10} className="text-center py-12 text-muted-foreground">אין סוכנים עדיין</TableCell></TableRow>
-            ) : agents.map(agent => {
+            ) : filteredAgents.length === 0 ? (
+              <TableRow><TableCell colSpan={10} className="text-center py-12 text-muted-foreground">{search ? 'לא נמצאו סוכנים התואמים לחיפוש' : 'אין סוכנים עדיין'}</TableCell></TableRow>
+            ) : filteredAgents.map(agent => {
               const stats = agentStats[agent.id] || { count: 0, agentIncome: 0, officeIncome: 0 };
               return (
                 <TableRow key={agent.id} className="hover:bg-muted/30">

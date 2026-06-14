@@ -24,6 +24,7 @@ import ExcelImportDialog from '@/components/ExcelImportDialog';
 const PAYMENT_METHODS = ['מזומן', 'שיק', 'העברה בנקאית', 'כרטיס אשראי', 'ביט', 'פייפאל', 'אחר'];
 
 const THIS_MONTH = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+const THIS_YEAR = String(new Date().getFullYear());
 
 // ── KPI Card ───────────────────────────────────────────────
 function KpiCard({ label, value, icon: Icon, color }) {
@@ -41,8 +42,11 @@ export default function Reports() {
   const { user } = useCurrentUser();
   const isAdminView = useIsAdminView();
   const [selectedAgent, setSelectedAgent] = useState('all');
-  const [dateFrom, setDateFrom] = useState(THIS_MONTH);
-  const [dateTo, setDateTo] = useState(THIS_MONTH);
+  const [filterMode, setFilterMode] = useState('month');
+  const [filterMonth, setFilterMonth] = useState(THIS_MONTH);
+  const [filterFromMonth, setFilterFromMonth] = useState(THIS_MONTH);
+  const [filterToMonth, setFilterToMonth] = useState(THIS_MONTH);
+  const [filterYear, setFilterYear] = useState(THIS_YEAR);
   const [search, setSearch] = useState('');
   const [exporting, setExporting] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -115,19 +119,28 @@ export default function Reports() {
     return new Set(allDeals.filter(d => d.agent_id === myAgent.id).map(d => d.id));
   }, [allDeals, myAgent]);
 
+  const matchesDate = (dateStr) => {
+    if (!dateStr) return false;
+    const m = dateStr.slice(0, 7);
+    const y = dateStr.slice(0, 4);
+    if (filterMode === 'month') return m === filterMonth;
+    if (filterMode === 'range') return m >= filterFromMonth && m <= filterToMonth;
+    if (filterMode === 'year') return y === filterYear;
+    return true;
+  };
+
+  const availableYears = useMemo(() => {
+    const years = [...new Set(allPayments.map(p => p.date?.slice(0, 4)).filter(Boolean))].sort().reverse();
+    if (!years.includes(THIS_YEAR)) years.unshift(THIS_YEAR);
+    return years;
+  }, [allPayments]);
+
   const payments = useMemo(() => {
     let p = allPayments;
     if (!isAdminView) p = p.filter(x => myDealIds.has(x.deal_id));
     if (isAdminView && selectedAgent !== 'all') p = p.filter(x => x.agent_id === selectedAgent);
-    return p.filter(x => {
-      if (!dateFrom && !dateTo) return true;
-      if (!x.date) return false;
-      const d = x.date.slice(0, 7);
-      if (dateFrom && d < dateFrom) return false;
-      if (dateTo && d > dateTo) return false;
-      return true;
-    });
-  }, [allPayments, isAdminView, myDealIds, selectedAgent, dateFrom, dateTo]);
+    return p.filter(x => matchesDate(x.date));
+  }, [allPayments, isAdminView, myDealIds, selectedAgent, filterMode, filterMonth, filterFromMonth, filterToMonth, filterYear]);
 
   const filteredPayments = useMemo(() => {
     if (!search) return payments;
@@ -153,7 +166,8 @@ export default function Reports() {
   }, [allDeals, isAdminView, myAgent, pickerSearch]);
 
   const exportCSV = () => {
-    downloadCSV(`הכנסות_${dateFrom || 'כל'}_${dateTo || 'הזמנים'}.csv`, filteredPayments, {
+    const label = filterMode === 'year' ? filterYear : filterMode === 'month' ? filterMonth : `${filterFromMonth}_${filterToMonth}`;
+    downloadCSV(`הכנסות_${label}.csv`, filteredPayments, {
       date: 'תאריך', deal_client_name: 'לקוח', deal_address: 'כתובת',
       amount: 'סכום', payment_method: 'אמצעי תשלום', agent_name: 'סוכן', notes: 'הערות',
     });
@@ -173,7 +187,8 @@ export default function Reports() {
       const imgW = pageW - 20;
       const imgH = (canvas.height * imgW) / canvas.width;
       pdf.addImage(imgData, 'PNG', 10, 10, imgW, imgH);
-      pdf.save(`הכנסות_${dateFrom || 'כל'}_${dateTo || 'הזמנים'}.pdf`);
+      const label = filterMode === 'year' ? filterYear : filterMode === 'month' ? filterMonth : `${filterFromMonth}_${filterToMonth}`;
+      pdf.save(`הכנסות_${label}.pdf`);
       toast.success('הדוח יוצא בהצלחה');
     } catch { toast.error('שגיאה בייצוא'); }
     finally { setExporting(false); }
@@ -214,9 +229,35 @@ export default function Reports() {
 
       {/* Filters + export */}
       <Card className="rounded-2xl">
-        <CardContent className="p-4 space-y-3">
-          <div className="flex flex-wrap gap-3">
-            <div className="relative flex-1 min-w-[200px]">
+        <CardContent className="p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex rounded-xl border overflow-hidden shrink-0">
+              {[['month', 'חודש'], ['range', 'טווח'], ['year', 'שנה']].map(([mode, label]) => (
+                <button key={mode} onClick={() => setFilterMode(mode)}
+                  className={`px-3 py-1.5 text-xs font-medium transition-colors ${filterMode === mode ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {filterMode === 'month' && (
+              <Input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="w-36 rounded-xl shrink-0" />
+            )}
+            {filterMode === 'range' && (
+              <>
+                <Input type="month" value={filterFromMonth} onChange={e => setFilterFromMonth(e.target.value)} className="w-36 rounded-xl shrink-0" />
+                <span className="text-muted-foreground text-sm">—</span>
+                <Input type="month" value={filterToMonth} onChange={e => setFilterToMonth(e.target.value)} className="w-36 rounded-xl shrink-0" />
+              </>
+            )}
+            {filterMode === 'year' && (
+              <Select value={filterYear} onValueChange={setFilterYear}>
+                <SelectTrigger className="w-32 rounded-xl shrink-0"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
+            <div className="relative flex-1 min-w-[160px]">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input placeholder="חיפוש לקוח, כתובת, סוכן..." value={search} onChange={e => setSearch(e.target.value)} className="pr-9 rounded-xl" />
             </div>
@@ -229,12 +270,6 @@ export default function Reports() {
                 </SelectContent>
               </Select>
             )}
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="text-xs text-muted-foreground whitespace-nowrap">טווח תאריכים:</span>
-            <Input type="month" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-36 rounded-xl" />
-            <span className="text-muted-foreground text-sm">—</span>
-            <Input type="month" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-36 rounded-xl" />
           </div>
         </CardContent>
       </Card>

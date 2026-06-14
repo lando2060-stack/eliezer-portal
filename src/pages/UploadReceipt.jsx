@@ -364,8 +364,8 @@ export default function UploadReceipt() {
                       <Input type="date" value={extractedData.date || ''} onChange={(e) => updateField('date', e.target.value)} />
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs">מספר קבלה</Label>
-                      <Input value={extractedData.receipt_number || ''} onChange={(e) => updateField('receipt_number', e.target.value)} />
+                      <Label className="text-xs">מספר חשבונית</Label>
+                      <Input value={extractedData.invoice_number || ''} onChange={(e) => updateField('invoice_number', e.target.value)} />
                     </div>
                   </div>
 
@@ -409,23 +409,17 @@ export default function UploadReceipt() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">מטבע</Label>
-                      <Select value={extractedData.currency || 'ILS'} onValueChange={(v) => updateField('currency', v)}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="ILS">₪ שקל</SelectItem>
-                          <SelectItem value="USD">$ דולר</SelectItem>
-                          <SelectItem value="EUR">€ יורו</SelectItem>
-                          <SelectItem value="GBP">£ ליש״ט</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">מספר חשבונית</Label>
-                      <Input value={extractedData.invoice_number || ''} onChange={(e) => updateField('invoice_number', e.target.value)} />
-                    </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">מטבע</Label>
+                    <Select value={extractedData.currency || 'ILS'} onValueChange={(v) => updateField('currency', v)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ILS">₪ שקל</SelectItem>
+                        <SelectItem value="USD">$ דולר</SelectItem>
+                        <SelectItem value="EUR">€ יורו</SelectItem>
+                        <SelectItem value="GBP">£ ליש״ט</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">

@@ -24,7 +24,7 @@ function getAreas() {
 
 function getLeadSources() {
   try {
-    return JSON.parse(localStorage.getItem('app_lead_sources') || '["יד2","פייסבוק","המלצה","אתר","אינסטגרם"]');
+    return JSON.parse(localStorage.getItem('app_lead_sources') || '[]');
   } catch { return []; }
 }
 
@@ -37,7 +37,6 @@ function saveLeadSource(value) {
   }
 }
 
-// Autocomplete input for lead source
 function LeadSourceInput({ value, onChange }) {
   const [open, setOpen] = useState(false);
   const [suggestions, setSuggestions] = useState([]);

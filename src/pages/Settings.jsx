@@ -335,10 +335,7 @@ function CatalogTab() {
 }
 
 // ---- Integrations Tab ----
-function IntegrationsTab({ agentPerms = {} }) {
-  const { user } = useCurrentUser();
-  const isAdmin = user?.role === 'admin';
-  const canEmail = isAdmin || agentPerms.can_connect_email !== false;
+function IntegrationsTab() {
 
   // Gmail state
   const [gmailStatus, setGmailStatus] = useState(null);
@@ -346,7 +343,6 @@ function IntegrationsTab({ agentPerms = {} }) {
   const [gmailDisconnecting, setGmailDisconnecting] = useState(false);
   const [scanning, setScanning] = useState(false);
 
-  // Drive state (admin only — central drive for everyone)
   const [driveStatus, setDriveStatus] = useState(null);
   const [driveLoading, setDriveLoading] = useState(true);
   const [driveDisconnecting, setDriveDisconnecting] = useState(false);
@@ -369,8 +365,9 @@ function IntegrationsTab({ agentPerms = {} }) {
       window.history.replaceState({}, '', window.location.pathname);
     }
 
-    // Load Gmail status
-    getAuthHeaders().then(headers =>
+    const headers$ = getAuthHeaders();
+
+    headers$.then(headers =>
       fetch('/api/google/status?service=gmail', { headers })
         .then(r => r.json())
         .then(data => setGmailStatus(data))
@@ -378,18 +375,13 @@ function IntegrationsTab({ agentPerms = {} }) {
         .finally(() => setGmailLoading(false))
     );
 
-    // Load Drive status (admin only)
-    if (isAdmin) {
-      getAuthHeaders().then(headers =>
-        fetch('/api/google/status?service=drive', { headers })
-          .then(r => r.json())
-          .then(data => setDriveStatus(data))
-          .catch(() => setDriveStatus({ connected: false }))
-          .finally(() => setDriveLoading(false))
-      );
-    } else {
-      setDriveLoading(false);
-    }
+    headers$.then(headers =>
+      fetch('/api/google/status?service=drive', { headers })
+        .then(r => r.json())
+        .then(data => setDriveStatus(data))
+        .catch(() => setDriveStatus({ connected: false }))
+        .finally(() => setDriveLoading(false))
+    );
   }, []);
 
   const connectGmail = async () => {
@@ -478,8 +470,7 @@ function IntegrationsTab({ agentPerms = {} }) {
     <div className="space-y-4 max-w-xl">
 
       {/* Gmail Card */}
-      {canEmail && (
-        <Card className="rounded-2xl shadow-sm">
+      <Card className="rounded-2xl shadow-sm">
           <CardContent className="p-5">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
@@ -525,65 +516,56 @@ function IntegrationsTab({ agentPerms = {} }) {
               </div>
             </div>
           </CardContent>
-        </Card>
-      )}
+      </Card>
 
-      {/* Google Drive Card — central drive, admin managed */}
-      {isAdmin && (
-        <Card className="rounded-2xl shadow-sm">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 border flex items-center justify-center flex-shrink-0">
-                  <HardDrive className="w-5 h-5 text-blue-500" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-sm">Google Drive</span>
-                    {driveLoading ? (
-                      <span className="text-xs text-muted-foreground">בודק...</span>
-                    ) : driveStatus?.connected ? (
-                      <span className="text-xs text-emerald-600 font-medium bg-emerald-50 px-2 py-0.5 rounded-full">מחובר</span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">לא מחובר</span>
-                    )}
-                  </div>
-                  {driveStatus?.connected ? (
-                    <p className="text-xs text-muted-foreground mt-0.5 truncate">{driveStatus.email}</p>
+      {/* Google Drive Card */}
+      <Card className="rounded-2xl shadow-sm">
+        <CardContent className="p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 border flex items-center justify-center flex-shrink-0">
+                <HardDrive className="w-5 h-5 text-blue-500" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-sm">Google Drive</span>
+                  {driveLoading ? (
+                    <span className="text-xs text-muted-foreground">בודק...</span>
+                  ) : driveStatus?.connected ? (
+                    <span className="text-xs text-emerald-600 font-medium bg-emerald-50 px-2 py-0.5 rounded-full">מחובר</span>
                   ) : (
-                    <p className="text-xs text-muted-foreground mt-0.5">דרייב מרכזי — כל הסוכנים משתמשים באותו דרייב</p>
+                    <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">לא מחובר</span>
                   )}
                 </div>
-              </div>
-              <div className="flex gap-2 flex-shrink-0">
-                {driveStatus?.connected && driveStatus.folderUrl && (
-                  <a href={driveStatus.folderUrl} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
-                    פתח תיקייה ↗
-                  </a>
-                )}
                 {driveStatus?.connected ? (
-                  <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/5 hover:text-destructive"
-                    onClick={disconnectDrive} disabled={driveDisconnecting}>
-                    נתק
-                  </Button>
+                  <p className="text-xs text-muted-foreground mt-0.5 truncate">{driveStatus.email}</p>
                 ) : (
-                  <Button size="sm" variant="outline" className="gap-2" onClick={connectDrive} disabled={driveLoading}>
-                    <GoogleIcon /> התחבר
-                  </Button>
+                  <p className="text-xs text-muted-foreground mt-0.5">גיבוי קבלות אוטומטי לדרייב</p>
                 )}
               </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
+            <div className="flex gap-2 flex-shrink-0">
+              {driveStatus?.connected && driveStatus.folderUrl && (
+                <a href={driveStatus.folderUrl} target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                  פתח תיקייה ↗
+                </a>
+              )}
+              {driveStatus?.connected ? (
+                <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/5 hover:text-destructive"
+                  onClick={disconnectDrive} disabled={driveDisconnecting}>
+                  נתק
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" className="gap-2" onClick={connectDrive} disabled={driveLoading}>
+                  <GoogleIcon /> התחבר
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-      {!canEmail && !isAdmin && (
-        <div className="text-center py-10 text-muted-foreground">
-          <p className="font-medium">הגישה לחיבורים לא מאופשרת</p>
-          <p className="text-sm mt-1">המנהל לא הפעיל אפשרות זו עבורך</p>
-        </div>
-      )}
     </div>
   );
 }
@@ -965,7 +947,7 @@ export default function Settings() {
           </div>
         </div>
 
-        {activeSection === 'integrations' && <IntegrationsTab agentPerms={agentPerms} />}
+        {activeSection === 'integrations' && <IntegrationsTab />}
         {activeSection === 'catalog' && admin && <CatalogTab />}
       </div>
     );

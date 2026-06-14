@@ -19,6 +19,9 @@ import DealFormDialog from '@/components/deals/DealFormDialog';
 import DealDetailDialog from '@/components/deals/DealDetailDialog';
 import ExcelImportDialog from '@/components/ExcelImportDialog';
 
+const THIS_YEAR = String(new Date().getFullYear());
+const THIS_MONTH = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+
 // Derive status from data instead of stored field
 function dealStatus(deal) {
   const status = computeDealStatus(deal);
@@ -33,8 +36,11 @@ export default function Deals() {
   const [agentFilter, setAgentFilter] = useState('all');
   const [lawyerFilter, setLawyerFilter] = useState('all');
   const [cooperationFilter, setCooperationFilter] = useState('all');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [filterMode, setFilterMode] = useState('month');
+  const [filterMonth, setFilterMonth] = useState(THIS_MONTH);
+  const [filterFromMonth, setFilterFromMonth] = useState(THIS_MONTH);
+  const [filterToMonth, setFilterToMonth] = useState(THIS_MONTH);
+  const [filterYear, setFilterYear] = useState(THIS_YEAR);
   const [editDeal, setEditDeal] = useState(null);
   const [viewDeal, setViewDeal] = useState(null);
   const [showImport, setShowImport] = useState(false);
@@ -75,12 +81,18 @@ export default function Deals() {
   const lawyers = useMemo(() => [...new Set(deals.map(d => d.lawyer_name).filter(Boolean))], [deals]);
   const cooperations = useMemo(() => [...new Set(deals.map(d => d.cooperation_agent).filter(Boolean))], [deals]);
 
-  // A filter is "active" when at least one filter field has a value
-  const hasActiveFilter = search || statusFilter !== 'all' || agentFilter !== 'all' ||
-    lawyerFilter !== 'all' || cooperationFilter !== 'all' || dateFrom || dateTo;
+  const matchesDate = (month) => {
+    if (!month) return false;
+    const y = month.slice(0, 4);
+    if (filterMode === 'month') return month === filterMonth;
+    if (filterMode === 'range') return month >= filterFromMonth && month <= filterToMonth;
+    if (filterMode === 'year') return y === filterYear;
+    return true;
+  };
+
+  const hasActiveFilter = true;
 
   const filtered = useMemo(() => {
-    if (!hasActiveFilter) return [];
     return deals.filter(d => {
       const computedStatus = computeDealStatus(d);
       const matchSearch = !search || d.client_name?.includes(search) || d.address?.includes(search) || d.agent_name?.includes(search);
@@ -88,12 +100,15 @@ export default function Deals() {
       const matchAgent = agentFilter === 'all' || agentFilter === '__all__' || d.agent_id === agentFilter;
       const matchLawyer = lawyerFilter === 'all' || d.lawyer_name === lawyerFilter;
       const matchCooperation = cooperationFilter === 'all' || d.cooperation_agent === cooperationFilter;
-      const month = d.month || '';
-      const matchFrom = !dateFrom || month >= dateFrom;
-      const matchTo = !dateTo || month <= dateTo;
-      return matchSearch && matchStatus && matchAgent && matchLawyer && matchCooperation && matchFrom && matchTo;
+      return matchSearch && matchStatus && matchAgent && matchLawyer && matchCooperation && matchesDate(d.month);
     });
-  }, [deals, search, statusFilter, agentFilter, lawyerFilter, cooperationFilter, dateFrom, dateTo, hasActiveFilter]);
+  }, [deals, search, statusFilter, agentFilter, lawyerFilter, cooperationFilter, filterMode, filterMonth, filterFromMonth, filterToMonth, filterYear]);
+
+  const availableYears = useMemo(() => {
+    const years = [...new Set(deals.map(d => d.month?.slice(0, 4)).filter(Boolean))].sort().reverse();
+    if (!years.includes(THIS_YEAR)) years.unshift(THIS_YEAR);
+    return years;
+  }, [deals]);
 
   // Summary stats (all deals for admin overview tiles)
   const allStats = useMemo(() => ({
@@ -183,9 +198,7 @@ export default function Deals() {
         <Button variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={exportPDF} disabled={exporting || !hasActiveFilter}>
           {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} PDF
         </Button>
-        <Button className="gap-2 rounded-xl" onClick={() => setEditDeal({})}>
-          <Plus className="w-4 h-4" /> עסקה חדשה
-        </Button>
+
       </div>
 
       {/* Summary tiles */}
@@ -239,13 +252,13 @@ export default function Deals() {
                 <SelectContent>
                   <SelectItem value="all">כל הסוכנים</SelectItem>
                   <SelectItem value="__all__">הצג את כולם</SelectItem>
-                  {agents.filter(a => a.is_active).map(a => (
+                  {agents.map(a => (
                     <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             )}
-            {isAdminView && lawyers.length > 0 && (
+            {isAdminView && (
               <Select value={lawyerFilter} onValueChange={setLawyerFilter}>
                 <SelectTrigger className="w-36 rounded-xl"><SelectValue placeholder='עו"ד' /></SelectTrigger>
                 <SelectContent>
@@ -254,7 +267,7 @@ export default function Deals() {
                 </SelectContent>
               </Select>
             )}
-            {isAdminView && cooperations.length > 0 && (
+            {isAdminView && (
               <Select value={cooperationFilter} onValueChange={setCooperationFilter}>
                 <SelectTrigger className="w-36 rounded-xl"><SelectValue placeholder='שת"פ' /></SelectTrigger>
                 <SelectContent>
@@ -265,26 +278,39 @@ export default function Deals() {
             )}
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <span className="text-xs text-muted-foreground whitespace-nowrap">טווח תאריכים:</span>
-            <Input type="month" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-36 rounded-xl" />
-            <span className="text-muted-foreground text-sm">—</span>
-            <Input type="month" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-36 rounded-xl" />
+            <div className="flex rounded-xl border overflow-hidden">
+              {[['month', 'חודש'], ['range', 'טווח'], ['year', 'שנה']].map(([mode, label]) => (
+                <button key={mode} onClick={() => setFilterMode(mode)}
+                  className={`px-3 py-1.5 text-xs font-medium transition-colors ${filterMode === mode ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {filterMode === 'month' && (
+              <Input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="w-36 rounded-xl" />
+            )}
+            {filterMode === 'range' && (
+              <>
+                <Input type="month" value={filterFromMonth} onChange={e => setFilterFromMonth(e.target.value)} className="w-36 rounded-xl" />
+                <span className="text-muted-foreground text-sm">—</span>
+                <Input type="month" value={filterToMonth} onChange={e => setFilterToMonth(e.target.value)} className="w-36 rounded-xl" />
+              </>
+            )}
+            {filterMode === 'year' && (
+              <Select value={filterYear} onValueChange={setFilterYear}>
+                <SelectTrigger className="w-32 rounded-xl"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </CardContent>
       </Card>
 
       {/* Table */}
-      {!hasActiveFilter ? (
-        <Card className="rounded-2xl">
-          <CardContent className="py-16 text-center text-muted-foreground">
-            <Search className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <p className="font-medium">בחר סינון להצגת עסקאות</p>
-            <p className="text-sm mt-1">הזן חיפוש, בחר סוכן, סטטוס או טווח תאריכים</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          {hasActiveFilter && filtered.length > 0 && (
+      <>
+          {filtered.length > 0 && (
             <div className="text-sm text-muted-foreground flex gap-4 flex-wrap px-1">
               <span>{filtered.length} עסקאות</span>
               <span>עמלות: <strong className="text-foreground">{formatCurrency(filteredStats.totalCommission)}</strong></span>
@@ -364,7 +390,6 @@ export default function Deals() {
             </div>
           </Card>
         </>
-      )}
 
       {viewDeal && !editDeal && (
         <DealDetailDialog
