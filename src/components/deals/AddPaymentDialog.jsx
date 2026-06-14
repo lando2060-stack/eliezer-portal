@@ -40,7 +40,14 @@ export default function AddPaymentDialog({ deal, onClose }) {
       });
       const allPayments = await base44.entities.Payment.filter({ deal_id: deal.id });
       const newCollected = allPayments.reduce((s, p) => s + (p.amount || 0), 0);
-      await base44.entities.Deal.update(deal.id, { collected_actual: newCollected });
+      const commissionAmount = deal.commission_amount || 0;
+      const newStatus = commissionAmount > 0 && newCollected >= commissionAmount ? 'סגורה' : 'פתוחה';
+      const collectionPct = commissionAmount > 0 ? Math.round((newCollected / commissionAmount) * 100) : 0;
+      await base44.entities.Deal.update(deal.id, {
+        collected_actual: newCollected,
+        collection_percent: collectionPct,
+        status: newStatus,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payments', deal.id] });
@@ -52,6 +59,11 @@ export default function AddPaymentDialog({ deal, onClose }) {
     onError: () => toast.error('שגיאה בשמירת ההכנסה'),
   });
 
+  const commissionAmount = deal.commission_amount || 0;
+  const currentCollected = deal.collected_actual || 0;
+  const remaining = Math.max(0, commissionAmount - currentCollected);
+  const currentPct = commissionAmount > 0 ? Math.round((currentCollected / commissionAmount) * 100) : 0;
+
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-sm">
@@ -59,6 +71,27 @@ export default function AddPaymentDialog({ deal, onClose }) {
           <DialogTitle>הוספת הכנסה — {deal.client_name}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          {/* Summary */}
+          <div className="grid grid-cols-3 gap-2 p-3 bg-muted/40 rounded-xl text-xs text-center">
+            <div>
+              <p className="text-muted-foreground">עמלה כוללת</p>
+              <p className="font-bold">{formatCurrency(commissionAmount)}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">נגבה</p>
+              <p className="font-bold text-emerald-700">{formatCurrency(currentCollected)}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">יתרה</p>
+              <p className="font-bold text-amber-700">{formatCurrency(remaining)}</p>
+            </div>
+          </div>
+          {commissionAmount > 0 && (
+            <div className="text-xs text-muted-foreground text-center">
+              גבייה: <span className={`font-bold ${currentPct >= 100 ? 'text-emerald-700' : 'text-primary'}`}>{currentPct}%</span>
+            </div>
+          )}
+
           <div className="space-y-1">
             <Label className="text-xs">סכום שהתקבל ₪ *</Label>
             <Input type="number" value={form.amount} onChange={e => upd('amount', e.target.value)} placeholder="0" />

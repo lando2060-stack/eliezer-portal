@@ -338,14 +338,18 @@ function CatalogTab() {
 function IntegrationsTab({ agentPerms = {} }) {
   const { user } = useCurrentUser();
   const isAdmin = user?.role === 'admin';
-  const [driveMode, setDriveMode] = useState('personal');
-  const canDrive = isAdmin || driveMode === 'personal';
   const canEmail = isAdmin || agentPerms.can_connect_email !== false;
-  const [googleStatus, setGoogleStatus] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [disconnecting, setDisconnecting] = useState(false);
+
+  // Gmail state
+  const [gmailStatus, setGmailStatus] = useState(null);
+  const [gmailLoading, setGmailLoading] = useState(true);
+  const [gmailDisconnecting, setGmailDisconnecting] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [openaiStatus, setOpenaiStatus] = useState(null); // null | { connected, reason }
+
+  // Drive state (admin only — central drive for everyone)
+  const [driveStatus, setDriveStatus] = useState(null);
+  const [driveLoading, setDriveLoading] = useState(true);
+  const [driveDisconnecting, setDriveDisconnecting] = useState(false);
 
   const getAuthHeaders = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -353,61 +357,88 @@ function IntegrationsTab({ agentPerms = {} }) {
   };
 
   useEffect(() => {
-    // Google status
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('gmail') === 'connected') {
+      toast.success('Gmail חובר בהצלחה!');
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (params.get('drive') === 'connected') {
+      toast.success('Google Drive חובר בהצלחה!');
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (params.get('drive') === 'error' || params.get('gmail') === 'error') {
+      toast.error('שגיאה בחיבור Google');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+
+    // Load Gmail status
     getAuthHeaders().then(headers =>
-      fetch('/api/google/status', { headers })
+      fetch('/api/google/status?service=gmail', { headers })
         .then(r => r.json())
-        .then(data => setGoogleStatus(data))
-        .catch(() => setGoogleStatus({ connected: false }))
-        .finally(() => setLoading(false))
+        .then(data => setGmailStatus(data))
+        .catch(() => setGmailStatus({ connected: false }))
+        .finally(() => setGmailLoading(false))
     );
 
-    // OpenAI status
-    fetch('/api/check-openai')
-      .then(r => r.json())
-      .then(data => setOpenaiStatus(data))
-      .catch(() => setOpenaiStatus({ connected: false, reason: 'בעיית רשת' }));
-
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('drive') === 'connected') {
-      toast.success('Google חובר בהצלחה! Drive ו-Gmail פעילים.');
-      window.history.replaceState({}, '', '/settings');
-    } else if (params.get('drive') === 'error') {
-      toast.error('שגיאה בחיבור Google');
-      window.history.replaceState({}, '', '/settings');
+    // Load Drive status (admin only)
+    if (isAdmin) {
+      getAuthHeaders().then(headers =>
+        fetch('/api/google/status?service=drive', { headers })
+          .then(r => r.json())
+          .then(data => setDriveStatus(data))
+          .catch(() => setDriveStatus({ connected: false }))
+          .finally(() => setDriveLoading(false))
+      );
+    } else {
+      setDriveLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    supabase.from('profiles').select('drive_mode').eq('role', 'admin').limit(1).single()
-      .then(({ data }) => { if (data?.drive_mode) setDriveMode(data.drive_mode); })
-      .catch(() => {});
-  }, []);
-
-  const saveDriveMode = async (mode) => {
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    if (!authUser) return;
-    await supabase.from('profiles').update({ drive_mode: mode }).eq('id', authUser.id);
-    setDriveMode(mode);
-    toast.success('ההגדרה נשמרה');
-  };
-
-  const handleConnect = async () => {
+  const connectGmail = async () => {
     const headers = await getAuthHeaders();
-    const res = await fetch('/api/google/auth-url', { headers });
+    const res = await fetch('/api/google/auth-url?service=gmail', { headers });
     const { url, error } = await res.json();
-    if (error || !url) { toast.error('שגיאה ביצירת קישור התחברות'); return; }
+    if (error || !url) {
+      // Fallback to legacy endpoint
+      const res2 = await fetch('/api/google/auth-url', { headers });
+      const d2 = await res2.json();
+      if (d2.url) { window.location.href = d2.url; return; }
+      toast.error('שגיאה ביצירת קישור התחברות');
+      return;
+    }
     window.location.href = url;
   };
 
-  const handleDisconnect = async () => {
-    if (!window.confirm('לנתק את Google?')) return;
-    setDisconnecting(true);
+  const connectDrive = async () => {
     const headers = await getAuthHeaders();
-    await fetch('/api/google/disconnect', { method: 'POST', headers });
-    setGoogleStatus({ connected: false });
-    setDisconnecting(false);
-    toast.success('Google נותק');
+    const res = await fetch('/api/google/auth-url?service=drive', { headers });
+    const { url, error } = await res.json();
+    if (error || !url) {
+      const res2 = await fetch('/api/google/auth-url', { headers });
+      const d2 = await res2.json();
+      if (d2.url) { window.location.href = d2.url; return; }
+      toast.error('שגיאה ביצירת קישור התחברות');
+      return;
+    }
+    window.location.href = url;
+  };
+
+  const disconnectGmail = async () => {
+    if (!window.confirm('לנתק את Gmail?')) return;
+    setGmailDisconnecting(true);
+    const headers = await getAuthHeaders();
+    await fetch('/api/google/disconnect?service=gmail', { method: 'POST', headers });
+    setGmailStatus({ connected: false });
+    setGmailDisconnecting(false);
+    toast.success('Gmail נותק');
+  };
+
+  const disconnectDrive = async () => {
+    if (!window.confirm('לנתק את Google Drive?')) return;
+    setDriveDisconnecting(true);
+    const headers = await getAuthHeaders();
+    await fetch('/api/google/disconnect?service=drive', { method: 'POST', headers });
+    setDriveStatus({ connected: false });
+    setDriveDisconnecting(false);
+    toast.success('Google Drive נותק');
   };
 
   const handleScanGmail = async () => {
@@ -421,7 +452,7 @@ function IntegrationsTab({ agentPerms = {} }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'שגיאה בסריקה');
       if (data.created > 0) {
-        toast.success(`נמצאו ${data.found} מיילים חדשים — ${data.created} חשבוניות נוספו לתיבת הדואר (עמוד הוצאות → חשבוניות ממייל)`);
+        toast.success(`נמצאו ${data.found} מיילים — ${data.created} חשבוניות נוספו (עמוד הוצאות → חשבוניות ממייל)`);
       } else if (data.found > 0) {
         toast.info(`נמצאו ${data.found} מיילים אך לא זוהו קבצים חדשים`);
       } else {
@@ -446,120 +477,108 @@ function IntegrationsTab({ agentPerms = {} }) {
   return (
     <div className="space-y-4 max-w-xl">
 
-      {/* Google connection — single card covering Drive + Gmail */}
-      {(canDrive || canEmail) && (
+      {/* Gmail Card */}
+      {canEmail && (
         <Card className="rounded-2xl shadow-sm">
           <CardContent className="p-5">
-            {/* Header row */}
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white border flex items-center justify-center flex-shrink-0">
-                  <GoogleIcon size={20} />
+                <div className="w-10 h-10 rounded-xl bg-red-50 border flex items-center justify-center flex-shrink-0">
+                  <Mail className="w-5 h-5 text-red-500" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-sm">Google</span>
-                    {loading ? (
+                    <span className="font-semibold text-sm">Gmail</span>
+                    {gmailLoading ? (
                       <span className="text-xs text-muted-foreground">בודק...</span>
-                    ) : googleStatus?.connected ? (
+                    ) : gmailStatus?.connected ? (
                       <span className="text-xs text-emerald-600 font-medium bg-emerald-50 px-2 py-0.5 rounded-full">מחובר</span>
                     ) : (
                       <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">לא מחובר</span>
                     )}
                   </div>
-                  {googleStatus?.connected ? (
-                    <p className="text-xs text-muted-foreground mt-0.5 truncate">{googleStatus.email}</p>
+                  {gmailStatus?.connected ? (
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">{gmailStatus.email}</p>
                   ) : (
-                    <p className="text-xs text-muted-foreground mt-0.5">Drive ו-Gmail — חיבור אחד לשניהם</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">סריקת חשבוניות ממייל אוטומטית</p>
                   )}
                 </div>
               </div>
-              {googleStatus?.connected ? (
-                <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/5 hover:text-destructive flex-shrink-0"
-                  onClick={handleDisconnect} disabled={disconnecting}>
-                  נתק
-                </Button>
-              ) : (
-                <Button size="sm" variant="outline" className="gap-2 flex-shrink-0" onClick={handleConnect} disabled={loading}>
-                  <GoogleIcon /> התחבר עם Google
-                </Button>
-              )}
-            </div>
-
-            {/* Services list */}
-            <div className="mt-4 border-t pt-4 grid grid-cols-1 gap-2">
-              {canDrive && (
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                      <HardDrive className="w-3.5 h-3.5 text-blue-500" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium">Google Drive</p>
-                      <p className="text-xs text-muted-foreground">שמירת קבלות אוטומטית</p>
-                    </div>
-                  </div>
-                  {googleStatus?.connected && googleStatus.folderUrl && (
-                    <a href={googleStatus.folderUrl} target="_blank" rel="noopener noreferrer"
-                      className="text-xs text-primary hover:underline flex-shrink-0">
-                      פתח תיקייה ↗
-                    </a>
-                  )}
-                </div>
-              )}
-              {canEmail && (
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center flex-shrink-0">
-                      <Mail className="w-3.5 h-3.5 text-red-400" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium">Gmail</p>
-                      <p className="text-xs text-muted-foreground">סריקת קבלות ממייל</p>
-                    </div>
-                  </div>
-                  {googleStatus?.connected && (
-                    <Button size="sm" variant="ghost" className="h-7 text-xs gap-1.5 flex-shrink-0 text-muted-foreground hover:text-foreground"
-                      onClick={handleScanGmail} disabled={scanning}>
-                      {scanning ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                      {scanning ? 'סורק...' : 'סרוק עכשיו'}
-                    </Button>
-                  )}
-                </div>
-              )}
+              <div className="flex gap-2 flex-shrink-0">
+                {gmailStatus?.connected && (
+                  <Button size="sm" variant="ghost" className="h-8 text-xs gap-1.5 text-muted-foreground hover:text-foreground"
+                    onClick={handleScanGmail} disabled={scanning}>
+                    {scanning ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                    {scanning ? 'סורק...' : 'סרוק'}
+                  </Button>
+                )}
+                {gmailStatus?.connected ? (
+                  <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/5 hover:text-destructive"
+                    onClick={disconnectGmail} disabled={gmailDisconnecting}>
+                    נתק
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="outline" className="gap-2" onClick={connectGmail} disabled={gmailLoading}>
+                    <GoogleIcon /> התחבר
+                  </Button>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Drive Mode (admin only) */}
+      {/* Google Drive Card — central drive, admin managed */}
       {isAdmin && (
-        <Card className="rounded-2xl bg-muted/30 border-dashed">
-          <CardContent className="p-4">
-            <p className="text-xs font-semibold text-muted-foreground mb-3">הגדרות שמירת קבצים ב-Drive</p>
-            <div className="flex flex-col gap-2">
-              {[
-                { value: 'personal', label: 'דרייב אישי לכל סוכן', desc: 'כל סוכן מחבר את הדרייב שלו' },
-                { value: 'central', label: 'דרייב מרכזי של המשרד', desc: 'כל הקבלות נשמרות בדרייב אחד' },
-              ].map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => saveDriveMode(opt.value)}
-                  className={`flex items-center gap-3 p-3 rounded-xl border-2 text-right transition-all ${driveMode === opt.value ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'}`}
-                >
-                  <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 transition-colors ${driveMode === opt.value ? 'border-primary bg-primary' : 'border-muted-foreground'}`} />
-                  <div>
-                    <p className="text-sm font-medium">{opt.label}</p>
-                    <p className="text-xs text-muted-foreground">{opt.desc}</p>
+        <Card className="rounded-2xl shadow-sm">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 border flex items-center justify-center flex-shrink-0">
+                  <HardDrive className="w-5 h-5 text-blue-500" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-sm">Google Drive</span>
+                    {driveLoading ? (
+                      <span className="text-xs text-muted-foreground">בודק...</span>
+                    ) : driveStatus?.connected ? (
+                      <span className="text-xs text-emerald-600 font-medium bg-emerald-50 px-2 py-0.5 rounded-full">מחובר</span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">לא מחובר</span>
+                    )}
                   </div>
-                </button>
-              ))}
+                  {driveStatus?.connected ? (
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">{driveStatus.email}</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground mt-0.5">דרייב מרכזי — כל הסוכנים משתמשים באותו דרייב</p>
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-2 flex-shrink-0">
+                {driveStatus?.connected && driveStatus.folderUrl && (
+                  <a href={driveStatus.folderUrl} target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                    פתח תיקייה ↗
+                  </a>
+                )}
+                {driveStatus?.connected ? (
+                  <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/5 hover:text-destructive"
+                    onClick={disconnectDrive} disabled={driveDisconnecting}>
+                    נתק
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="outline" className="gap-2" onClick={connectDrive} disabled={driveLoading}>
+                    <GoogleIcon /> התחבר
+                  </Button>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {!canDrive && !canEmail && (
+      {!canEmail && !isAdmin && (
         <div className="text-center py-10 text-muted-foreground">
           <p className="font-medium">הגישה לחיבורים לא מאופשרת</p>
           <p className="text-sm mt-1">המנהל לא הפעיל אפשרות זו עבורך</p>
@@ -600,6 +619,28 @@ function AgentPermissionsTab() {
     mutationFn: async (profile) => {
       const { error } = await supabase.from('profiles').update({ is_approved: true }).eq('id', profile.id);
       if (error) throw error;
+
+      // Create agents record if not already linked
+      const { data: existingAgent } = await supabase
+        .from('agents')
+        .select('id')
+        .eq('user_id', profile.id)
+        .maybeSingle();
+
+      if (!existingAgent) {
+        const { error: agentError } = await supabase.from('agents').insert({
+          name: profile.full_name || '',
+          email: '',
+          phone: profile.phone || '',
+          commission_percent: 50,
+          is_active: true,
+          user_id: profile.id,
+          notes: '',
+          permissions: {},
+        });
+        if (agentError) throw agentError;
+      }
+
       try {
         await fetch('/api/send-email', {
           method: 'POST',
@@ -608,7 +649,12 @@ function AgentPermissionsTab() {
         });
       } catch { /* non-fatal */ }
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['pending-profiles'] }); toast.success('הסוכן אושר בהצלחה'); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pending-profiles'] });
+      queryClient.invalidateQueries({ queryKey: ['agents'] });
+      queryClient.invalidateQueries({ queryKey: ['agent-profiles'] });
+      toast.success('הסוכן אושר בהצלחה');
+    },
     onError: () => toast.error('שגיאה באישור הסוכן'),
   });
 

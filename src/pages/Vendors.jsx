@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Search, Building2, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
-import { formatCurrency, STATUS_MAP } from '@/lib/constants';
+import { formatCurrency } from '@/lib/constants';
 import { format } from 'date-fns';
 
 function VendorRow({ vendor, expenses }) {
@@ -18,7 +18,9 @@ function VendorRow({ vendor, expenses }) {
     [expenses, vendor.name]
   );
 
-  const total = vendorExpenses.reduce((s, e) => s + (e.total_amount || 0), 0);
+  const totalNoVat = vendorExpenses.reduce((s, e) => s + (e.amount_before_vat || 0), 0);
+  const totalVat = vendorExpenses.reduce((s, e) => s + (e.vat_amount || 0), 0);
+  const totalWithVat = vendorExpenses.reduce((s, e) => s + (e.total_amount || 0), 0);
 
   return (
     <>
@@ -37,8 +39,9 @@ function VendorRow({ vendor, expenses }) {
         <TableCell className="text-muted-foreground text-sm">{vendor.tax_id || '-'}</TableCell>
         <TableCell>{vendor.default_category ? <Badge variant="secondary">{vendor.default_category}</Badge> : '-'}</TableCell>
         <TableCell className="text-sm">{vendorExpenses.length}</TableCell>
-        <TableCell className="font-semibold">{formatCurrency(total)}</TableCell>
-        <TableCell className="text-sm">{formatCurrency(vendorExpenses.length ? total / vendorExpenses.length : 0)}</TableCell>
+        <TableCell className="font-semibold">{formatCurrency(totalNoVat)}</TableCell>
+        <TableCell className="font-semibold text-amber-700">{formatCurrency(totalVat)}</TableCell>
+        <TableCell className="font-semibold text-primary">{formatCurrency(totalWithVat)}</TableCell>
         <TableCell className="text-sm text-muted-foreground">
           {vendor.last_expense_date ? format(new Date(vendor.last_expense_date), 'dd/MM/yyyy') : '-'}
         </TableCell>
@@ -51,7 +54,7 @@ function VendorRow({ vendor, expenses }) {
 
       {expanded && (
         <TableRow>
-          <TableCell colSpan={8} className="p-0 bg-muted/20">
+          <TableCell colSpan={9} className="p-0 bg-muted/20">
             {vendorExpenses.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">אין הוצאות רשומות לספק זה</p>
             ) : (
@@ -61,39 +64,38 @@ function VendorRow({ vendor, expenses }) {
                     <TableRow className="bg-muted/40">
                       <TableHead className="text-right text-xs">תאריך</TableHead>
                       <TableHead className="text-right text-xs">קטגוריה</TableHead>
-                      <TableHead className="text-right text-xs">סכום</TableHead>
-                      <TableHead className="text-right text-xs">סטטוס</TableHead>
+                      <TableHead className="text-right text-xs">לפני מע״מ</TableHead>
+                      <TableHead className="text-right text-xs">מע״מ</TableHead>
+                      <TableHead className="text-right text-xs">כולל מע״מ</TableHead>
                       <TableHead className="text-right text-xs">סוכן</TableHead>
                       <TableHead className="text-xs w-10"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {vendorExpenses.map(e => {
-                      const st = STATUS_MAP[e.status] || STATUS_MAP.pending_approval;
-                      return (
-                        <TableRow key={e.id} className="bg-white/60">
-                          <TableCell className="text-xs py-2">{e.date ? format(new Date(e.date), 'dd/MM/yyyy') : '-'}</TableCell>
-                          <TableCell className="text-xs py-2">{e.category || '-'}</TableCell>
-                          <TableCell className="text-xs py-2 font-semibold">{formatCurrency(e.total_amount, e.currency)}</TableCell>
-                          <TableCell className="py-2">
-                            <Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge>
-                          </TableCell>
-                          <TableCell className="text-xs py-2 text-muted-foreground">{e.agent_name || '-'}</TableCell>
-                          <TableCell className="py-2">
-                            {e.receipt_url && (
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={ev => { ev.stopPropagation(); window.open(e.receipt_url, '_blank'); }}>
-                                <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
+                    {vendorExpenses.map(e => (
+                      <TableRow key={e.id} className="bg-white/60">
+                        <TableCell className="text-xs py-2">{e.date ? format(new Date(e.date), 'dd/MM/yyyy') : '-'}</TableCell>
+                        <TableCell className="text-xs py-2">{e.category || '-'}</TableCell>
+                        <TableCell className="text-xs py-2">{formatCurrency(e.amount_before_vat || 0)}</TableCell>
+                        <TableCell className="text-xs py-2 text-amber-700">{formatCurrency(e.vat_amount || 0)}</TableCell>
+                        <TableCell className="text-xs py-2 font-semibold">{formatCurrency(e.total_amount, e.currency)}</TableCell>
+                        <TableCell className="text-xs py-2 text-muted-foreground">{e.agent_name || '-'}</TableCell>
+                        <TableCell className="py-2">
+                          {e.receipt_url && (
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={ev => { ev.stopPropagation(); window.open(e.receipt_url, '_blank'); }}>
+                              <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
-                <p className="text-xs text-muted-foreground text-end pt-2 pb-1">
-                  סה״כ: <strong>{formatCurrency(total)}</strong>
-                </p>
+                <div className="text-xs text-muted-foreground flex gap-4 justify-end pt-2 pb-1">
+                  <span>ללא מע״מ: <strong>{formatCurrency(totalNoVat)}</strong></span>
+                  <span>מע״מ: <strong>{formatCurrency(totalVat)}</strong></span>
+                  <span>כולל מע״מ: <strong>{formatCurrency(totalWithVat)}</strong></span>
+                </div>
               </div>
             )}
           </TableCell>
@@ -139,17 +141,18 @@ export default function Vendors() {
               <TableHead className="text-right">ח.פ.</TableHead>
               <TableHead className="text-right">קטגוריה</TableHead>
               <TableHead className="text-right">מספר קבלות</TableHead>
-              <TableHead className="text-right">סה״כ הוצאות</TableHead>
-              <TableHead className="text-right">סכום ממוצע</TableHead>
+              <TableHead className="text-right">ללא מע״מ</TableHead>
+              <TableHead className="text-right">מע״מ</TableHead>
+              <TableHead className="text-right">כולל מע״מ</TableHead>
               <TableHead className="text-right">הוצאה אחרונה</TableHead>
               <TableHead className="w-12"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground">טוען...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground">טוען...</TableCell></TableRow>
             ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground">לא נמצאו ספקים</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground">לא נמצאו ספקים</TableCell></TableRow>
             ) : (
               filtered.map(vendor => (
                 <VendorRow key={vendor.id} vendor={vendor} expenses={allExpenses} />

@@ -25,12 +25,11 @@ export default function ExpenseEditDialog({ expense, categories, agents = [], cu
     vat_amount: expense.vat_amount || '',
     category: expense.category || '',
     payment_method: expense.payment_method || '',
-    receipt_number: expense.receipt_number || '',
     invoice_number: expense.invoice_number || '',
     currency: expense.currency || 'ILS',
     notes: expense.notes || '',
     has_receipt: expense.has_receipt || false,
-    status: expense.status || (isNew ? 'approved' : expense.status),
+    status: 'approved',
     receipt_url: expense.receipt_url || '',
     scope: expense.scope || (admin ? 'office' : 'agent'),
     agent_id: expense.agent_id || (myAgent?.id || ''),
@@ -47,15 +46,37 @@ export default function ExpenseEditDialog({ expense, categories, agents = [], cu
     setData(prev => ({ ...prev, agent_id: agentId, agent_name: agent?.name || '' }));
   };
 
+  // Auto-calculate VAT when total changes
+  const handleTotalChange = (val) => {
+    const total = parseFloat(val) || 0;
+    upd('total_amount', val);
+  };
+
+  const handleBeforeVatChange = (val) => {
+    const before = parseFloat(val) || 0;
+    const vat = parseFloat(data.vat_amount) || 0;
+    setData(prev => ({
+      ...prev,
+      amount_before_vat: val,
+      total_amount: before + vat ? String(before + vat) : prev.total_amount,
+    }));
+  };
+
+  const handleVatChange = (val) => {
+    const vat = parseFloat(val) || 0;
+    const before = parseFloat(data.amount_before_vat) || 0;
+    setData(prev => ({
+      ...prev,
+      vat_amount: val,
+      total_amount: before + vat ? String(before + vat) : prev.total_amount,
+    }));
+  };
+
   const mutation = useMutation({
     mutationFn: async () => {
-      // If agent submitting office expense → pending_approval, agent expense → approved
-      const status = !admin
-        ? (data.scope === 'office' ? 'pending_approval' : 'approved')
-        : data.status;
       const payload = {
         ...data,
-        status,
+        status: 'approved',
         total_amount: parseFloat(data.total_amount) || 0,
         amount_before_vat: parseFloat(data.amount_before_vat) || 0,
         vat_amount: parseFloat(data.vat_amount) || 0,
@@ -112,11 +133,23 @@ export default function ExpenseEditDialog({ expense, categories, agents = [], cu
             <div className="space-y-1"><Label className="text-xs">שם ספק *</Label><Input value={data.vendor_name} onChange={e => upd('vendor_name', e.target.value)} /></div>
             <div className="space-y-1"><Label className="text-xs">תאריך *</Label><Input type="date" value={data.date} onChange={e => upd('date', e.target.value)} /></div>
           </div>
+
+          {/* VAT fields */}
           <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-1"><Label className="text-xs">סכום כולל *</Label><Input type="number" value={data.total_amount} onChange={e => upd('total_amount', e.target.value)} /></div>
-            <div className="space-y-1"><Label className="text-xs">לפני מע״מ</Label><Input type="number" value={data.amount_before_vat} onChange={e => upd('amount_before_vat', e.target.value)} /></div>
-            <div className="space-y-1"><Label className="text-xs">מע״מ</Label><Input type="number" value={data.vat_amount} onChange={e => upd('vat_amount', e.target.value)} /></div>
+            <div className="space-y-1">
+              <Label className="text-xs">סכום לפני מע״מ</Label>
+              <Input type="number" value={data.amount_before_vat} onChange={e => handleBeforeVatChange(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">מע״מ</Label>
+              <Input type="number" value={data.vat_amount} onChange={e => handleVatChange(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">סכום כולל מע״מ *</Label>
+              <Input type="number" value={data.total_amount} onChange={e => handleTotalChange(e.target.value)} />
+            </div>
           </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label className="text-xs">קטגוריה</Label>
@@ -134,7 +167,7 @@ export default function ExpenseEditDialog({ expense, categories, agents = [], cu
             </div>
           </div>
 
-          {/* Scope / expense type */}
+          {/* Expense type */}
           <div className="space-y-1">
             <Label className="text-xs">סוג הוצאה</Label>
             <Select value={data.scope} onValueChange={v => upd('scope', v)}>
@@ -146,9 +179,6 @@ export default function ExpenseEditDialog({ expense, categories, agents = [], cu
                 <SelectItem value="deal">קשורה לעסקה</SelectItem>
               </SelectContent>
             </Select>
-            {!admin && data.scope === 'office' && (
-              <p className="text-xs text-amber-600 flex items-center gap-1 mt-1">⏳ הוצאת משרד תועבר לאישור מנהל</p>
-            )}
           </div>
 
           {data.scope === 'agent' && admin && (
@@ -161,9 +191,9 @@ export default function ExpenseEditDialog({ expense, categories, agents = [], cu
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1"><Label className="text-xs">מספר קבלה</Label><Input value={data.receipt_number} onChange={e => upd('receipt_number', e.target.value)} /></div>
-            <div className="space-y-1"><Label className="text-xs">מספר חשבונית</Label><Input value={data.invoice_number} onChange={e => upd('invoice_number', e.target.value)} /></div>
+          <div className="space-y-1">
+            <Label className="text-xs">מספר חשבונית</Label>
+            <Input value={data.invoice_number} onChange={e => upd('invoice_number', e.target.value)} />
           </div>
 
           <div className="space-y-1"><Label className="text-xs">הערות</Label><Textarea value={data.notes} onChange={e => upd('notes', e.target.value)} rows={2} /></div>

@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
-import { formatCurrency, DEAL_STATUS_MAP } from '@/lib/constants';
+import { formatCurrency, computeDealStatus, DEAL_STATUS_MAP } from '@/lib/constants';
 import { isAdmin } from '@/lib/roles';
 import { toast } from 'sonner';
 import AddPaymentDialog from './AddPaymentDialog';
@@ -36,7 +36,14 @@ export default function DealDetailDialog({ deal, agents, currentUser, onEdit, on
       await base44.entities.Payment.delete(payment.id);
       const allPayments = await base44.entities.Payment.filter({ deal_id: deal.id });
       const newCollected = allPayments.reduce((s, p) => s + (p.amount || 0), 0);
-      await base44.entities.Deal.update(deal.id, { collected_actual: newCollected });
+      const commissionAmount = deal.commission_amount || 0;
+      const newStatus = commissionAmount > 0 && newCollected >= commissionAmount ? 'סגורה' : 'פתוחה';
+      const collectionPct = commissionAmount > 0 ? Math.round((newCollected / commissionAmount) * 100) : 0;
+      await base44.entities.Deal.update(deal.id, {
+        collected_actual: newCollected,
+        collection_percent: collectionPct,
+        status: newStatus,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payments', deal.id] });
@@ -47,9 +54,11 @@ export default function DealDetailDialog({ deal, agents, currentUser, onEdit, on
     onError: () => toast.error('שגיאה במחיקת ההכנסה'),
   });
 
-  const st = DEAL_STATUS_MAP[deal.status] || DEAL_STATUS_MAP['פתוחה'];
   const totalPayments = payments.reduce((s, p) => s + (p.amount || 0), 0);
-  const totalCommission = payments.reduce((s, p) => s + (p.commission_amount || 0), 0);
+  const commissionAmount = deal.commission_amount || 0;
+  const collectionPct = commissionAmount > 0 ? Math.round((totalPayments / commissionAmount) * 100) : 0;
+  const derivedStatus = computeDealStatus({ ...deal, collected_actual: totalPayments });
+  const st = DEAL_STATUS_MAP[derivedStatus] || DEAL_STATUS_MAP['פתוחה'];
 
   return (
     <>
@@ -77,21 +86,24 @@ export default function DealDetailDialog({ deal, agents, currentUser, onEdit, on
               <InfoRow label="צד" value={deal.side} />
               <InfoRow label="חודש" value={deal.month} />
               <InfoRow label="מקור ליד" value={deal.lead_source} />
-              <InfoRow label="מקור עסקה" value={deal.origin} />
             </div>
             <div className="bg-muted/40 rounded-xl p-4 space-y-0.5">
               <p className="text-xs font-semibold text-muted-foreground mb-2">נתונים פיננסיים</p>
               <InfoRow label="סכום עסקה" value={formatCurrency(deal.deal_amount)} />
-              <InfoRow label="סכום עמלה" value={formatCurrency(deal.commission_amount)} />
+              <InfoRow label="עמלה (לפני מע״מ)" value={formatCurrency(commissionAmount)} />
               <InfoRow label="נגבה בפועל" value={formatCurrency(totalPayments)} />
+              <InfoRow label="% גבייה" value={
+                <span className={collectionPct >= 100 ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}>
+                  {collectionPct}%
+                </span>
+              } />
               <InfoRow label="עמלת סוכן" value={formatCurrency(deal.agent_commission)} />
               <InfoRow label="עמלת משרד" value={formatCurrency(deal.office_commission)} />
-              <InfoRow label="שולם לסוכן" value={formatCurrency(deal.paid_to_agent)} />
-              <InfoRow label="אמצעי תשלום" value={deal.payment_method} />
+              <InfoRow label="חשבונית" value={deal.has_invoice ? 'יש חשבונית' : 'אין חשבונית'} />
             </div>
           </div>
 
-          {(admin) && (
+          {admin && (
             <div className="bg-muted/40 rounded-xl p-4 space-y-0.5">
               <p className="text-xs font-semibold text-muted-foreground mb-2">פרטים נוספים</p>
               <div className="grid grid-cols-2 gap-x-6">
@@ -111,7 +123,8 @@ export default function DealDetailDialog({ deal, agents, currentUser, onEdit, on
                 <h3 className="font-semibold text-sm">הכנסות מהעסקה</h3>
                 {payments.length > 0 && (
                   <p className="text-xs text-muted-foreground">
-                    סה״כ התקבל: {formatCurrency(totalPayments)} • עמלת חברה: {formatCurrency(totalCommission)}
+                    סה״כ התקבל: {formatCurrency(totalPayments)} • גבייה: {collectionPct}%
+                    {collectionPct >= 100 && <span className="text-emerald-600 font-medium"> — עסקה סגורה</span>}
                   </p>
                 )}
               </div>
@@ -165,7 +178,7 @@ export default function DealDetailDialog({ deal, agents, currentUser, onEdit, on
 
       {showAddPayment && (
         <AddPaymentDialog
-          deal={deal}
+          deal={{ ...deal, collected_actual: totalPayments }}
           agents={agents}
           onClose={() => setShowAddPayment(false)}
         />

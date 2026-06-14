@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 
+const THIS_YEAR = String(new Date().getFullYear());
 const THIS_MONTH = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -12,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, MoreVertical, Pencil, Trash2, Upload, Plus, CheckCircle, Download, PenLine, Mail, Sparkles, TrendingDown, Clock, Receipt, FileX, RefreshCw, Save, Loader2, FileSpreadsheet, ScanLine } from 'lucide-react';
+import { Search, MoreVertical, Pencil, Trash2, Upload, Plus, Download, PenLine, Mail, Sparkles, TrendingDown, Receipt, FileX, RefreshCw, Save, Loader2, FileSpreadsheet, ScanLine, CalendarDays } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import ReceiptReviewDialog from '@/components/ReceiptReviewDialog';
@@ -219,7 +220,6 @@ function GmailInboxTab({ inboxExpenses, isLoading, onDelete, isAdminView }) {
         </Table>
       </Card>
 
-      {/* Full extract+review dialog — same as manual upload */}
       {reviewExpense && (
         <ReceiptReviewDialog
           open={!!reviewExpense}
@@ -239,10 +239,12 @@ export default function Expenses() {
   const { user } = useCurrentUser();
   const isAdminView = useIsAdminView();
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
   const [agentFilter, setAgentFilter] = useState('all');
-  const [dateFrom, setDateFrom] = useState(THIS_MONTH);
-  const [dateTo, setDateTo] = useState(THIS_MONTH);
+  const [filterMode, setFilterMode] = useState('month'); // 'month' | 'range' | 'year'
+  const [filterMonth, setFilterMonth] = useState(THIS_MONTH);
+  const [filterFromMonth, setFilterFromMonth] = useState(THIS_MONTH);
+  const [filterToMonth, setFilterToMonth] = useState(THIS_MONTH);
+  const [filterYear, setFilterYear] = useState(THIS_YEAR);
   const [viewExpense, setViewExpense] = useState(null);
   const [editExpense, setEditExpense] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -275,7 +277,6 @@ export default function Expenses() {
     return allExpenses.filter(e => e.agent_id === myAgent?.id || e.created_by_id === user?.id);
   }, [allExpenses, user, myAgent]);
 
-  // Split: regular expenses vs gmail inbox
   const expenses = useMemo(() => allUserExpenses.filter(e => e.status !== 'gmail_inbox'), [allUserExpenses]);
   const gmailInbox = useMemo(() => allUserExpenses.filter(e => e.status === 'gmail_inbox'), [allUserExpenses]);
 
@@ -285,50 +286,53 @@ export default function Expenses() {
     onError: () => toast.error('שגיאה במחיקת ההוצאה'),
   });
 
-  const approveMutation = useMutation({
-    mutationFn: (id) => base44.entities.Expense.update(id, { status: 'approved' }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['expenses'] }); toast.success('ההוצאה אושרה'); },
-    onError: () => toast.error('שגיאה באישור ההוצאה'),
-  });
+  // Date filter logic
+  const matchesDate = (e) => {
+    if (!e.date) return false;
+    const m = e.date.slice(0, 7); // YYYY-MM
+    const y = e.date.slice(0, 4); // YYYY
+    if (filterMode === 'month') return m === filterMonth;
+    if (filterMode === 'range') return m >= filterFromMonth && m <= filterToMonth;
+    if (filterMode === 'year') return y === filterYear;
+    return true;
+  };
 
   const filtered = useMemo(() => expenses.filter(e => {
     const matchSearch = !search || e.vendor_name?.toLowerCase().includes(search.toLowerCase()) || e.category?.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === 'all' || e.status === statusFilter;
     const matchAgent = agentFilter === 'all' || e.agent_id === agentFilter;
-    const matchDate = (() => {
-      if (!dateFrom && !dateTo) return true;
-      if (!e.date) return false;
-      const m = e.date.slice(0, 7);
-      if (dateFrom && m < dateFrom) return false;
-      if (dateTo && m > dateTo) return false;
-      return true;
-    })();
-    return matchSearch && matchStatus && matchAgent && matchDate;
-  }), [expenses, search, statusFilter, agentFilter, dateFrom, dateTo]);
+    return matchSearch && matchAgent && matchesDate(e);
+  }), [expenses, search, agentFilter, filterMode, filterMonth, filterFromMonth, filterToMonth, filterYear]);
 
-  const totalFiltered = filtered.reduce((s, e) => s + (e.total_amount || 0), 0);
+  // Annual total (no VAT) — all expenses in the selected year
+  const currentYear = filterMode === 'year' ? filterYear : filterMonth?.slice(0, 4) || filterFromMonth?.slice(0, 4) || THIS_YEAR;
+  const annualExpenses = useMemo(() =>
+    expenses.filter(e => e.date?.slice(0, 4) === currentYear),
+    [expenses, currentYear]
+  );
 
   const expenseStats = useMemo(() => ({
-    total: expenses.reduce((s, e) => s + (e.total_amount || 0), 0),
-    approved: expenses.filter(e => e.status === 'approved').reduce((s, e) => s + (e.total_amount || 0), 0),
-    pending: expenses.filter(e => e.status === 'pending_approval').length,
-    missingReceipt: expenses.filter(e => !e.has_receipt).length,
-  }), [expenses]);
+    totalNoVat: filtered.reduce((s, e) => s + (e.amount_before_vat || 0), 0),
+    totalVat: filtered.reduce((s, e) => s + (e.vat_amount || 0), 0),
+    totalWithVat: filtered.reduce((s, e) => s + (e.total_amount || 0), 0),
+    annualNoVat: annualExpenses.reduce((s, e) => s + (e.amount_before_vat || 0), 0),
+  }), [filtered, annualExpenses]);
 
   const exportExcel = () => {
     const wb = XLSX.utils.book_new();
     const rows = filtered.map(e => ({
       תאריך: e.date || '',
       ספק: e.vendor_name || '',
+      'מספר חשבונית': e.invoice_number || '',
       קטגוריה: e.category || '',
-      סכום: e.total_amount || 0,
-      סטטוס: e.status || '',
+      'סכום לפני מע"מ': e.amount_before_vat || 0,
+      'מע"מ': e.vat_amount || 0,
+      'סכום כולל מע"מ': e.total_amount || 0,
       סוכן: e.agent_name || '',
       'אמצעי תשלום': e.payment_method || '',
       הערות: e.notes || '',
     }));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'הוצאות');
-    XLSX.writeFile(wb, `הוצאות_${dateFrom || 'כל'}_${dateTo || 'הזמנים'}.xlsx`);
+    XLSX.writeFile(wb, `הוצאות_${new Date().toISOString().slice(0, 10)}.xlsx`);
     toast.success('הקובץ יוצא בהצלחה');
   };
 
@@ -345,7 +349,7 @@ export default function Expenses() {
       const imgW = pageW - 20;
       const imgH = (canvas.height * imgW) / canvas.width;
       pdf.addImage(imgData, 'PNG', 10, 10, imgW, imgH);
-      pdf.save(`הוצאות_${dateFrom || 'כל'}_${dateTo || 'הזמנים'}.pdf`);
+      pdf.save(`הוצאות_${new Date().toISOString().slice(0, 10)}.pdf`);
       toast.success('הדוח יוצא בהצלחה');
     } catch { toast.error('שגיאה בייצוא PDF'); }
     finally { setExporting(false); }
@@ -363,7 +367,7 @@ export default function Expenses() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'שגיאה בסריקה');
       if (data.created > 0) {
-        toast.success(`נמצאו ${data.found} מיילים — ${data.created} חשבוניות נוספו לחשבוניות ממייל`);
+        toast.success(`נמצאו ${data.found} מיילים — ${data.created} חשבוניות נוספו`);
         queryClient.invalidateQueries({ queryKey: ['expenses'] });
       } else if (data.found > 0) {
         toast.info(`נמצאו ${data.found} מיילים אך לא זוהו קבצים חדשים`);
@@ -377,12 +381,19 @@ export default function Expenses() {
     }
   };
 
+  // Available years from data
+  const availableYears = useMemo(() => {
+    const years = [...new Set(expenses.map(e => e.date?.slice(0, 4)).filter(Boolean))].sort().reverse();
+    if (!years.includes(THIS_YEAR)) years.unshift(THIS_YEAR);
+    return years;
+  }, [expenses]);
+
   return (
     <div className="space-y-6" dir="rtl">
       <div className="flex items-center gap-3 flex-wrap">
         <div className="me-auto">
           <h1 className="text-2xl font-bold">קבלות והוצאות</h1>
-          <p className="text-muted-foreground text-sm mt-1">{filtered.length} הוצאות • סה״כ {formatCurrency(totalFiltered)}</p>
+          <p className="text-muted-foreground text-sm mt-1">{filtered.length} הוצאות</p>
         </div>
         <Button variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={handleScanGmail} disabled={scanning}>
           {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <ScanLine className="w-4 h-4" />}
@@ -397,31 +408,35 @@ export default function Expenses() {
         <Button variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={exportPDF} disabled={exporting}>
           {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} PDF
         </Button>
+        <Button className="gap-1.5 rounded-xl" onClick={() => setShowAddModal(true)}>
+          <Plus className="w-4 h-4" /> הוצאה חדשה
+        </Button>
       </div>
 
+      {/* Summary tiles */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card className="rounded-2xl">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-red-100 text-red-600"><TrendingDown className="w-5 h-5" /></div>
-            <div><p className="text-xs text-muted-foreground">סה״כ הוצאות</p><p className="text-xl font-bold">{formatCurrency(expenseStats.total)}</p></div>
+            <div className="p-2 rounded-xl bg-blue-100 text-blue-600"><TrendingDown className="w-5 h-5" /></div>
+            <div><p className="text-xs text-muted-foreground">סה״כ ללא מע״מ</p><p className="text-xl font-bold">{formatCurrency(expenseStats.totalNoVat)}</p></div>
           </CardContent>
         </Card>
         <Card className="rounded-2xl">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-emerald-100 text-emerald-600"><Receipt className="w-5 h-5" /></div>
-            <div><p className="text-xs text-muted-foreground">מאושרות</p><p className="text-xl font-bold">{formatCurrency(expenseStats.approved)}</p></div>
+            <div className="p-2 rounded-xl bg-amber-100 text-amber-600"><Receipt className="w-5 h-5" /></div>
+            <div><p className="text-xs text-muted-foreground">סה״כ מע״מ</p><p className="text-xl font-bold">{formatCurrency(expenseStats.totalVat)}</p></div>
           </CardContent>
         </Card>
         <Card className="rounded-2xl">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-amber-100 text-amber-600"><Clock className="w-5 h-5" /></div>
-            <div><p className="text-xs text-muted-foreground">ממתינות לאישור</p><p className="text-xl font-bold">{expenseStats.pending}</p></div>
+            <div className="p-2 rounded-xl bg-red-100 text-red-600"><FileX className="w-5 h-5" /></div>
+            <div><p className="text-xs text-muted-foreground">סה״כ כולל מע״מ</p><p className="text-xl font-bold">{formatCurrency(expenseStats.totalWithVat)}</p></div>
           </CardContent>
         </Card>
         <Card className="rounded-2xl">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-purple-100 text-purple-600"><FileX className="w-5 h-5" /></div>
-            <div><p className="text-xs text-muted-foreground">חסרות קבלה</p><p className="text-xl font-bold">{expenseStats.missingReceipt}</p></div>
+            <div className="p-2 rounded-xl bg-emerald-100 text-emerald-600"><CalendarDays className="w-5 h-5" /></div>
+            <div><p className="text-xs text-muted-foreground">סה״כ שנתי ללא מע״מ</p><p className="text-xl font-bold">{formatCurrency(expenseStats.annualNoVat)}</p></div>
           </CardContent>
         </Card>
       </div>
@@ -449,13 +464,6 @@ export default function Expenses() {
                   <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input placeholder="חיפוש ספק, קטגוריה..." value={search} onChange={e => setSearch(e.target.value)} className="pr-9 rounded-xl" />
                 </div>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-40 rounded-xl"><SelectValue placeholder="סטטוס" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">כל הסטטוסים</SelectItem>
-                    {Object.entries(STATUS_MAP).filter(([k]) => k !== 'gmail_inbox').map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
                 {isAdminView && (
                   <Select value={agentFilter} onValueChange={setAgentFilter}>
                     <SelectTrigger className="w-40 rounded-xl"><SelectValue placeholder="כל הסוכנים" /></SelectTrigger>
@@ -466,11 +474,35 @@ export default function Expenses() {
                   </Select>
                 )}
               </div>
+
+              {/* Date filters */}
               <div className="flex flex-wrap items-center gap-3">
-                <span className="text-xs text-muted-foreground whitespace-nowrap">טווח תאריכים:</span>
-                <Input type="month" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-36 rounded-xl" />
-                <span className="text-muted-foreground text-sm">—</span>
-                <Input type="month" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-36 rounded-xl" />
+                <div className="flex rounded-xl border overflow-hidden">
+                  {[['month', 'חודש'], ['range', 'טווח'], ['year', 'שנה']].map(([mode, label]) => (
+                    <button key={mode} onClick={() => setFilterMode(mode)}
+                      className={`px-3 py-1.5 text-xs font-medium transition-colors ${filterMode === mode ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {filterMode === 'month' && (
+                  <Input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="w-36 rounded-xl" />
+                )}
+                {filterMode === 'range' && (
+                  <>
+                    <Input type="month" value={filterFromMonth} onChange={e => setFilterFromMonth(e.target.value)} className="w-36 rounded-xl" />
+                    <span className="text-muted-foreground text-sm">—</span>
+                    <Input type="month" value={filterToMonth} onChange={e => setFilterToMonth(e.target.value)} className="w-36 rounded-xl" />
+                  </>
+                )}
+                {filterMode === 'year' && (
+                  <Select value={filterYear} onValueChange={setFilterYear}>
+                    <SelectTrigger className="w-32 rounded-xl"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -482,10 +514,11 @@ export default function Expenses() {
                   <TableRow className="bg-muted/50">
                     <TableHead className="w-12"></TableHead>
                     <TableHead className="text-right">קבלה</TableHead>
-                    <TableHead className="text-right">סטטוס</TableHead>
                     {isAdminView && <TableHead className="text-right">סוכן</TableHead>}
                     <TableHead className="text-right">קטגוריה</TableHead>
-                    <TableHead className="text-right">סכום</TableHead>
+                    <TableHead className="text-right">לפני מע״מ</TableHead>
+                    <TableHead className="text-right">מע״מ</TableHead>
+                    <TableHead className="text-right">כולל מע״מ</TableHead>
                     <TableHead className="text-right">ספק</TableHead>
                     <TableHead className="text-right">תאריך</TableHead>
                   </TableRow>
@@ -495,50 +528,42 @@ export default function Expenses() {
                     <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground">טוען...</TableCell></TableRow>
                   ) : filtered.length === 0 ? (
                     <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground">לא נמצאו הוצאות</TableCell></TableRow>
-                  ) : filtered.map(expense => {
-                    const status = STATUS_MAP[expense.status] || STATUS_MAP.pending_approval;
-                    const scopeLabel = expense.scope === 'agent' ? 'סוכן' : expense.scope === 'deal' ? 'עסקה' : 'משרד';
-                    return (
-                      <TableRow key={expense.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => setViewExpense(expense)}>
-                        <TableCell onClick={e => e.stopPropagation()}>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="w-4 h-4" /></Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start">
-                              <DropdownMenuItem onClick={() => setEditExpense(expense)}><Pencil className="w-4 h-4 ml-2" /> עריכה</DropdownMenuItem>
-                              {isAdminView && expense.status !== 'approved' && (
-                                <DropdownMenuItem onClick={() => approveMutation.mutate(expense.id)}>
-                                  <CheckCircle className="w-4 h-4 ml-2 text-emerald-600" /> אישור
-                                </DropdownMenuItem>
-                              )}
-                              {expense.receipt_url && (
-                                <DropdownMenuItem onClick={() => window.open(expense.receipt_url, '_blank')}>
-                                  <Download className="w-4 h-4 ml-2" /> פתח קבלה
-                                </DropdownMenuItem>
-                              )}
-                              {isAdminView && (
-                                <DropdownMenuItem className="text-destructive" onClick={() => { if (window.confirm(`למחוק את ההוצאה "${expense.vendor_name}"? פעולה זו אינה ניתנת לביטול.`)) deleteMutation.mutate(expense.id); }}>
-                                  <Trash2 className="w-4 h-4 ml-2" /> מחיקה
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {expense.has_receipt
-                            ? <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 text-xs">יש</Badge>
-                            : <Badge variant="secondary" className="bg-red-100 text-red-700 text-xs">חסרה</Badge>}
-                        </TableCell>
-                        <TableCell className="text-right"><Badge variant="secondary" className={`text-xs ${status.color}`}>{status.label}</Badge></TableCell>
-                        {isAdminView && <TableCell className="text-sm text-muted-foreground text-right">{expense.agent_name || '-'}</TableCell>}
-                        <TableCell className="text-sm text-right">{expense.category || '-'}</TableCell>
-                        <TableCell className="font-semibold text-sm text-right">{formatCurrency(expense.total_amount, expense.currency)}</TableCell>
-                        <TableCell className="font-medium text-sm text-right">{expense.vendor_name || '-'}</TableCell>
-                        <TableCell className="text-sm text-right">{expense.date ? format(new Date(expense.date), 'dd/MM/yyyy') : '-'}</TableCell>
-                      </TableRow>
-                    );
-                  })}
+                  ) : filtered.map(expense => (
+                    <TableRow key={expense.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => setViewExpense(expense)}>
+                      <TableCell onClick={e => e.stopPropagation()}>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="w-4 h-4" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start">
+                            <DropdownMenuItem onClick={() => setEditExpense(expense)}><Pencil className="w-4 h-4 ml-2" /> עריכה</DropdownMenuItem>
+                            {expense.receipt_url && (
+                              <DropdownMenuItem onClick={() => window.open(expense.receipt_url, '_blank')}>
+                                <Download className="w-4 h-4 ml-2" /> פתח קבלה
+                              </DropdownMenuItem>
+                            )}
+                            {isAdminView && (
+                              <DropdownMenuItem className="text-destructive" onClick={() => { if (window.confirm(`למחוק את ההוצאה "${expense.vendor_name}"?`)) deleteMutation.mutate(expense.id); }}>
+                                <Trash2 className="w-4 h-4 ml-2" /> מחיקה
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {expense.has_receipt
+                          ? <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 text-xs">יש</Badge>
+                          : <Badge variant="secondary" className="bg-red-100 text-red-700 text-xs">חסרה</Badge>}
+                      </TableCell>
+                      {isAdminView && <TableCell className="text-sm text-muted-foreground text-right">{expense.agent_name || '-'}</TableCell>}
+                      <TableCell className="text-sm text-right">{expense.category || '-'}</TableCell>
+                      <TableCell className="text-sm text-right">{formatCurrency(expense.amount_before_vat || 0)}</TableCell>
+                      <TableCell className="text-sm text-right">{formatCurrency(expense.vat_amount || 0)}</TableCell>
+                      <TableCell className="font-semibold text-sm text-right">{formatCurrency(expense.total_amount, expense.currency)}</TableCell>
+                      <TableCell className="font-medium text-sm text-right">{expense.vendor_name || '-'}</TableCell>
+                      <TableCell className="text-sm text-right">{expense.date ? format(new Date(expense.date), 'dd/MM/yyyy') : '-'}</TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </div>
@@ -576,10 +601,11 @@ export default function Expenses() {
                 {[
                   ['ספק', viewExpense.vendor_name],
                   ['תאריך', viewExpense.date ? format(new Date(viewExpense.date), 'dd/MM/yyyy') : '-'],
+                  ['לפני מע״מ', formatCurrency(viewExpense.amount_before_vat || 0)],
+                  ['מע״מ', formatCurrency(viewExpense.vat_amount || 0)],
                   ['סכום כולל', formatCurrency(viewExpense.total_amount, viewExpense.currency)],
-                  ['לפני מע״מ', viewExpense.amount_before_vat ? formatCurrency(viewExpense.amount_before_vat) : '-'],
+                  ['מספר חשבונית', viewExpense.invoice_number || '-'],
                   ['קטגוריה', viewExpense.category || '-'],
-                  ['שיוך', viewExpense.scope === 'agent' ? 'סוכן' : viewExpense.scope === 'deal' ? 'עסקה' : 'משרד'],
                   ['סוכן', viewExpense.agent_name || '-'],
                   ['אמצעי תשלום', PAYMENT_METHODS[viewExpense.payment_method] || '-'],
                 ].map(([label, value]) => (
@@ -587,11 +613,6 @@ export default function Expenses() {
                 ))}
               </div>
               <div className="flex gap-2 pt-2">
-                {isAdminView && viewExpense.status !== 'approved' && (
-                  <Button className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700" onClick={() => { approveMutation.mutate(viewExpense.id); setViewExpense(null); }}>
-                    <CheckCircle className="w-4 h-4 ml-2" /> אשר הוצאה
-                  </Button>
-                )}
                 <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setEditExpense(viewExpense); setViewExpense(null); }}>
                   <Pencil className="w-4 h-4 ml-2" /> ערוך
                 </Button>
@@ -638,7 +659,6 @@ export default function Expenses() {
         </DialogContent>
       </Dialog>
 
-      {/* Receipt upload + review dialog */}
       <ReceiptReviewDialog
         open={showReceiptDialog}
         onClose={() => setShowReceiptDialog(false)}

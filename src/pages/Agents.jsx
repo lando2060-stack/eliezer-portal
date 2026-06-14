@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Pencil, Trash2, CheckCircle2, Clock, UserCheck } from 'lucide-react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/constants';
 
@@ -19,7 +19,7 @@ const EMPTY = { name: '', email: '', phone: '', commission_percent: 50, is_activ
 
 function statusBadge(agent) {
   if (!agent.is_active) return <Badge variant="secondary" className="bg-red-100 text-red-700 text-xs">חסום</Badge>;
-  return <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 text-xs">מאושר</Badge>;
+  return <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 text-xs">פעיל</Badge>;
 }
 
 export default function Agents() {
@@ -27,7 +27,7 @@ export default function Agents() {
   const [form, setForm] = useState(EMPTY);
   const queryClient = useQueryClient();
 
-  const { data: agents = [], isLoading: loadingAgents } = useQuery({
+  const { data: agents = [], isLoading } = useQuery({
     queryKey: ['agents'],
     queryFn: () => base44.entities.Agent.list(),
   });
@@ -49,23 +49,9 @@ export default function Agents() {
     return map;
   }, [allDeals]);
 
-  const { data: pendingProfiles = [], isLoading: loadingPending } = useQuery({
-    queryKey: ['pending-profiles'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, full_name, email, phone, role, is_approved')
-        .eq('is_approved', false)
-        .eq('role', 'agent');
-      if (error) throw error;
-      return data || [];
-    },
-  });
-
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (dialog.id) return base44.entities.Agent.update(dialog.id, form);
-      // New agent — always invite so an auth account is created
       const dup = agents.find(a => a.email?.toLowerCase() === form.email.toLowerCase());
       if (dup) throw new Error(`כבר קיים סוכן עם מייל זה: ${dup.name}`);
       const res = await fetch('/api/invite-user', {
@@ -75,6 +61,10 @@ export default function Agents() {
       });
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || 'שגיאה בשליחת הזמנה');
+      // Auto-approve the new agent profile
+      if (result.userId) {
+        await supabase.from('profiles').update({ is_approved: true }).eq('id', result.userId);
+      }
       return base44.entities.Agent.create({ ...form, user_id: result.userId });
     },
     onSuccess: () => {
@@ -103,95 +93,21 @@ export default function Agents() {
     onError: () => toast.error('שגיאה בעדכון הסטטוס'),
   });
 
-  const approveMutation = useMutation({
-    mutationFn: async (profile) => {
-      const { error } = await supabase.from('profiles').update({ is_approved: true }).eq('id', profile.id);
-      if (error) throw error;
-
-      // link or create agent record automatically
-      const existing = agents.find(a => a.email === profile.email);
-      if (existing) {
-        await base44.entities.Agent.update(existing.id, { user_id: profile.id, is_active: true });
-      } else {
-        await base44.entities.Agent.create({
-          name: profile.full_name || '',
-          email: profile.email || '',
-          phone: profile.phone || '',
-          commission_percent: 50,
-          is_active: true,
-          user_id: profile.id,
-        });
-      }
-
-      try {
-        await fetch('/api/send-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: profile.email, type: 'agent_approved', data: { name: profile.full_name } }),
-        });
-      } catch { /* non-fatal */ }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['pending-profiles'] });
-      queryClient.invalidateQueries({ queryKey: ['agents'] });
-      toast.success('הסוכן אושר בהצלחה');
-    },
-    onError: () => toast.error('שגיאה באישור הסוכן'),
-  });
-
   const openNew = () => { setForm(EMPTY); setDialog({}); };
   const openEdit = (a) => { setForm({ ...a }); setDialog(a); };
   const upd = (k, v) => setForm(p => ({ ...p, [k]: v }));
-
-  const isLoading = loadingAgents || loadingPending;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">סוכנים</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            {agents.length} סוכנים
-            {pendingProfiles.length > 0 && <span className="text-amber-600"> • {pendingProfiles.length} ממתינים לאישור</span>}
-          </p>
+          <p className="text-muted-foreground text-sm mt-1">{agents.length} סוכנים</p>
         </div>
         <Button className="gap-2 rounded-xl" onClick={openNew}>
           <Plus className="w-4 h-4" /> סוכן חדש
         </Button>
       </div>
-
-      {/* Pending profiles */}
-      {pendingProfiles.length > 0 && (
-        <div className="space-y-2">
-          <h2 className="text-sm font-semibold text-amber-700 flex items-center gap-2">
-            <Clock className="w-4 h-4" /> ממתינים לאישור ({pendingProfiles.length})
-          </h2>
-          {pendingProfiles.map(p => (
-            <Card key={p.id} className="rounded-2xl border-amber-200 bg-amber-50/50">
-              <CardContent className="p-4 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-amber-100 rounded-xl">
-                    <UserCheck className="w-5 h-5 text-amber-600" />
-                  </div>
-                  <div>
-                    <p className="font-semibold">{p.full_name || 'ללא שם'}</p>
-                    <p className="text-sm text-muted-foreground">{p.phone || ''}</p>
-                  </div>
-                  <Badge variant="secondary" className="bg-amber-100 text-amber-700 text-xs">ממתין לאישור</Badge>
-                </div>
-                <Button
-                  size="sm"
-                  className="gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700"
-                  onClick={() => approveMutation.mutate(p)}
-                  disabled={approveMutation.isPending}
-                >
-                  <CheckCircle2 className="w-4 h-4" /> אשר גישה
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
 
       {/* Agents table */}
       <Card className="rounded-2xl overflow-hidden">
@@ -218,34 +134,34 @@ export default function Agents() {
             ) : agents.map(agent => {
               const stats = agentStats[agent.id] || { count: 0, agentIncome: 0, officeIncome: 0 };
               return (
-              <TableRow key={agent.id} className="hover:bg-muted/30">
-                <TableCell className="font-semibold">{agent.name}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{agent.phone || '-'}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{agent.email || '-'}</TableCell>
-                <TableCell className="font-medium">{agent.commission_percent || 0}%</TableCell>
-                <TableCell className="font-medium text-blue-700">{stats.count}</TableCell>
-                <TableCell className="font-medium text-emerald-700">{formatCurrency(stats.agentIncome)}</TableCell>
-                <TableCell className="font-medium text-primary">{formatCurrency(stats.officeIncome)}</TableCell>
-                <TableCell>{statusBadge(agent)}</TableCell>
-                <TableCell>
-                  <Switch
-                    checked={agent.is_active}
-                    onCheckedChange={v => toggleActive.mutate({ id: agent.id, is_active: v, user_id: agent.user_id })}
-                  />
-                </TableCell>
-                <TableCell>
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(agent)}>
-                      <Pencil className="w-4 h-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"
-                      onClick={() => { if (window.confirm(`למחוק את הסוכן "${agent.name}"?`)) deleteMutation.mutate(agent.id); }}>
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            );
+                <TableRow key={agent.id} className="hover:bg-muted/30">
+                  <TableCell className="font-semibold">{agent.name}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{agent.phone || '-'}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{agent.email || '-'}</TableCell>
+                  <TableCell className="font-medium">{agent.commission_percent || 0}%</TableCell>
+                  <TableCell className="font-medium text-blue-700">{stats.count}</TableCell>
+                  <TableCell className="font-medium text-emerald-700">{formatCurrency(stats.agentIncome)}</TableCell>
+                  <TableCell className="font-medium text-primary">{formatCurrency(stats.officeIncome)}</TableCell>
+                  <TableCell>{statusBadge(agent)}</TableCell>
+                  <TableCell>
+                    <Switch
+                      checked={agent.is_active}
+                      onCheckedChange={v => toggleActive.mutate({ id: agent.id, is_active: v, user_id: agent.user_id })}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(agent)}>
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"
+                        onClick={() => { if (window.confirm(`למחוק את הסוכן "${agent.name}"?`)) deleteMutation.mutate(agent.id); }}>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
             })}
           </TableBody>
         </Table>

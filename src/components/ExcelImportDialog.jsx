@@ -25,15 +25,17 @@ const DEAL_COL_MAP = {
   'שם עו"ד': 'lawyer_name',
   'סוכן שיתוף': 'cooperation_agent',
   'מקור ליד': 'lead_source',
-  'משרד/לבד': 'origin',
   'הערות': 'notes',
 };
 
 const EXPENSE_COL_MAP = {
   'תאריך': 'date',
   'ספק': 'vendor_name',
-  'סכום': 'total_amount',
+  'מספר חשבונית': 'invoice_number',
   'קטגוריה': 'category',
+  'סכום לפני מע"מ': 'amount_before_vat',
+  'מע"מ': 'vat_amount',
+  'סכום כולל מע"מ': 'total_amount',
   'אמצעי תשלום': 'payment_method',
   'שם סוכן': 'agent_name',
   'הערות': 'notes',
@@ -63,15 +65,17 @@ const DEAL_SAMPLE = [{
   'שם עו"ד': 'דוד כהן',
   'סוכן שיתוף': '',
   'מקור ליד': 'יד2',
-  'משרד/לבד': 'משרד',
   'הערות': '',
 }];
 
 const EXPENSE_SAMPLE = [{
   'תאריך': '2024-01-15',
   'ספק': 'חברת פרסום',
-  'סכום': 1500,
+  'מספר חשבונית': '12345',
   'קטגוריה': 'פרסום',
+  'סכום לפני מע"מ': 1273,
+  'מע"מ': 229,
+  'סכום כולל מע"מ': 1502,
   'אמצעי תשלום': 'credit_card',
   'שם סוכן': 'שם הסוכן',
   'הערות': '',
@@ -219,17 +223,23 @@ export default function ExcelImportDialog({ type, agents = [], deals = [], onClo
 
   const buildExpensePayload = (row) => {
     const agent = agents.find((a) => a.name === String(row.agent_name || '').trim());
+    const amountBeforeVat = parseFloat(row.amount_before_vat) || 0;
+    const vatAmount = parseFloat(row.vat_amount) || 0;
+    const totalAmount = parseFloat(row.total_amount) || (amountBeforeVat + vatAmount) || 0;
     return {
       date: toDateStr(row.date),
       vendor_name: row.vendor_name || '',
-      total_amount: parseFloat(row.total_amount) || 0,
+      invoice_number: row.invoice_number || '',
+      total_amount: totalAmount,
+      amount_before_vat: amountBeforeVat,
+      vat_amount: vatAmount,
       category: row.category || '',
       payment_method: row.payment_method || '',
       notes: row.notes || '',
       agent_id: agent?.id || '',
       agent_name: agent?.name || String(row.agent_name || ''),
       scope: 'office',
-      status: 'pending_approval',
+      status: 'approved',
       has_receipt: false,
     };
   };

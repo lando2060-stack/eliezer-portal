@@ -6,10 +6,8 @@ import { BrowserRouter as Router, Route, Routes, Navigate, Outlet } from 'react-
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { isAdmin } from '@/lib/roles';
-import AwaitingApproval from '@/pages/AwaitingApproval';
 
 import Login from '@/pages/Login';
-import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
 
@@ -27,7 +25,6 @@ import FinancialReports from '@/pages/FinancialReports';
 import Settings from '@/pages/Settings';
 import UploadReceipt from '@/pages/UploadReceipt';
 import Statistics from '@/pages/Statistics';
-import PendingApproval from '@/pages/PendingApproval';
 import ActivityLog from '@/pages/ActivityLog';
 import Vendors from '@/pages/Vendors';
 
@@ -56,7 +53,6 @@ function AgentRouteGuard() {
   if (isLoadingAuth || !authChecked) return <Spinner />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (isAdmin(user)) return <Navigate to="/admin/dashboard" replace />;
-  if (user?.role === 'agent' && user?.is_approved === false) return <AwaitingApproval />;
 
   return <Outlet />;
 }
@@ -66,9 +62,9 @@ function AuthenticatedApp() {
     <Routes>
       {/* Public routes */}
       <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/register" element={<Navigate to="/login" replace />} />
 
       {/* Admin routes — /admin/* */}
       <Route element={<AdminRouteGuard />}>
@@ -83,7 +79,6 @@ function AuthenticatedApp() {
           <Route path="/admin/stats" element={<Statistics />} />
           <Route path="/admin/settings" element={<Settings />} />
           <Route path="/admin/upload" element={<UploadReceipt />} />
-          <Route path="/admin/pending" element={<PendingApproval />} />
           <Route path="/admin/activity" element={<ActivityLog />} />
           <Route path="/admin/vendors" element={<Vendors />} />
         </Route>
