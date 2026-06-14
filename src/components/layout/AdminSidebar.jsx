@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, BarChart3, Users, FileText, Wallet,
+  LayoutDashboard, BarChart3, Users, FileText, Receipt,
   Settings, Building2, Store, BookOpen, X, LogOut
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
@@ -11,7 +11,7 @@ const navItems = [
   { path: '/admin/stats',              label: 'סטטיסטיקות',   icon: BarChart3 },
   { path: '/admin/agents',             label: 'סוכנים',        icon: Users },
   { path: '/admin/deals',              label: 'עסקאות',        icon: FileText },
-  { path: '/admin/reports',            label: 'הכנסות',        icon: Wallet },
+  { path: '/admin/expenses',           label: 'הוצאות',        icon: Receipt },
   { path: '/admin/financial-reports',  label: 'דוחות',         icon: BookOpen },
   { path: '/admin/vendors',            label: 'ספקים',         icon: Store },
   { path: '/admin/settings',           label: 'הגדרות',        icon: Settings },
