@@ -144,6 +144,7 @@ export default async function handler(req, res) {
     .from('google_integrations')
     .select('*')
     .eq('user_id', user.id)
+    .eq('service', 'gmail')
     .single();
 
   if (!integration) return res.status(400).json({ error: 'Gmail not connected' });

@@ -190,14 +190,6 @@ export default function DealFormDialog({ deal, agents, currentUser, myAgent, onC
         </DialogHeader>
         <div className="space-y-4">
 
-          {/* יש חשבונית — top of form */}
-          <div className="flex items-center gap-3 p-3 bg-muted/40 rounded-xl">
-            <Switch checked={form.has_invoice} onCheckedChange={v => upd('has_invoice', v)} id="has-invoice" />
-            <Label htmlFor="has-invoice" className="text-sm font-medium cursor-pointer">
-              {form.has_invoice ? 'יש חשבונית' : 'אין חשבונית'}
-            </Label>
-          </div>
-
           {/* פרטי לקוח */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
@@ -248,57 +240,69 @@ export default function DealFormDialog({ deal, agents, currentUser, myAgent, onC
             <div className="p-3 bg-muted rounded-xl text-sm">סוכן: <strong>{form.agent_name || 'לא מוגדר'}</strong></div>
           )}
 
-          {/* סכום עסקה */}
-          <div className="space-y-1">
-            <Label className="text-xs">סכום עסקה *</Label>
-            <div className="relative">
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">₪</span>
-              <Input type="number" value={form.deal_amount} onChange={e => upd('deal_amount', e.target.value)} className="pr-7" placeholder="0" />
+          {/* סכום עסקה + יש חשבונית */}
+          <div className="flex items-end gap-3">
+            <div className="flex-1 space-y-1">
+              <Label className="text-xs">סכום עסקה *</Label>
+              <div className="relative">
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">₪</span>
+                <Input type="number" value={form.deal_amount} onChange={e => upd('deal_amount', e.target.value)} className="pr-7" placeholder="0" />
+              </div>
+            </div>
+            <div className="flex items-center gap-2 pb-1">
+              <Switch checked={form.has_invoice} onCheckedChange={v => upd('has_invoice', v)} id="has-invoice" />
+              <Label htmlFor="has-invoice" className="text-sm font-medium cursor-pointer whitespace-nowrap">יש חשבונית</Label>
             </div>
           </div>
 
-          {/* עמלה */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* שורת עמלה */}
+          <div className="grid grid-cols-4 gap-3">
             <div className="space-y-1">
-              <Label className="text-xs">אחוז עמלת משרד (%)</Label>
+              <Label className="text-xs">אחוז עמלה (%)</Label>
               <Input type="number" value={form.commission_percent} onChange={e => upd('commission_percent', e.target.value)} placeholder="2" />
             </div>
+            <div className="space-y-1">
+              <Label className="text-xs">סה״כ עמלה</Label>
+              <div className="h-10 px-3 py-2 rounded-md border bg-muted/40 text-sm font-medium flex items-center">
+                {formatCurrency(officeCommNet)}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">מע״מ</Label>
+              <div className="h-10 px-3 py-2 rounded-md border bg-muted/40 text-sm font-medium flex items-center">
+                {form.has_invoice ? formatCurrency(commVat) : '—'}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">סה״כ כולל מע״מ</Label>
+              <div className="h-10 px-3 py-2 rounded-md border bg-muted/40 text-sm font-medium flex items-center">
+                {form.has_invoice ? formatCurrency(officeCommWithVat) : '—'}
+              </div>
+            </div>
+          </div>
+
+          {/* שורת עמלת סוכן */}
+          <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1">
               <Label className="text-xs">אחוז עמלת סוכן (%)</Label>
               <Input type="number" value={form.agent_commission_percent} onChange={e => upd('agent_commission_percent', e.target.value)} placeholder="50" />
             </div>
-          </div>
-
-          {/* חלוקת עמלה — always shown */}
-          <div className="p-3 bg-blue-50 rounded-xl space-y-3">
-            <p className="text-xs font-semibold text-blue-800">חישוב עמלות</p>
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              {/* עמלת משרד */}
-              <div className="space-y-1">
-                <p className="text-muted-foreground font-medium">עמלת משרד</p>
-                <p className="font-bold text-primary">{formatCurrency(officeCommNet)} <span className="text-muted-foreground font-normal">(לפני מע״מ)</span></p>
-                {form.has_invoice && (
-                  <>
-                    <p className="text-muted-foreground">מע״מ: {formatCurrency(commVat)}</p>
-                    <p className="font-bold text-primary">כולל מע״מ: {formatCurrency(officeCommWithVat)}</p>
-                  </>
-                )}
-              </div>
-
-              {/* עמלת סוכן */}
-              <div className="space-y-1">
-                <p className="text-muted-foreground font-medium">עמלת סוכן (מהנטו)</p>
-                <p className="font-bold text-emerald-700">{formatCurrency(agentCommNet)} <span className="text-muted-foreground font-normal">(לפני מע״מ)</span></p>
+            <div className="space-y-1">
+              <Label className="text-xs">עמלת סוכן</Label>
+              <div className="h-10 px-3 py-2 rounded-md border bg-muted/40 text-sm font-medium text-emerald-700 flex items-center">
+                {formatCurrency(agentCommNet)}
               </div>
             </div>
-            <div className="border-t pt-2 text-xs text-muted-foreground">
-              <p>נוסחה: {formatCurrency(dealAmount)} × {commPct}% = {formatCurrency(officeCommNet)} עמלה כוללת</p>
-              <p>עמלת משרד לאחר חלוקה: {formatCurrency(officeCommNetAfterSplit)}</p>
+            <div className="space-y-1">
+              <Label className="text-xs">עמלת משרד</Label>
+              <div className="h-10 px-3 py-2 rounded-md border bg-muted/40 text-sm font-medium text-primary flex items-center">
+                {formatCurrency(officeCommNetAfterSplit)}
+              </div>
             </div>
           </div>
 
           {/* שדות נוספים */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1">
               <Label className="text-xs">מקור ליד</Label>
               <LeadSourceInput value={form.lead_source} onChange={v => upd('lead_source', v)} />
@@ -307,11 +311,10 @@ export default function DealFormDialog({ deal, agents, currentUser, myAgent, onC
               <Label className="text-xs">שם עו"ד</Label>
               <Input value={form.lawyer_name} onChange={e => upd('lawyer_name', e.target.value)} />
             </div>
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-xs">סוכן שיתוף</Label>
-            <Input value={form.cooperation_agent} onChange={e => upd('cooperation_agent', e.target.value)} />
+            <div className="space-y-1">
+              <Label className="text-xs">סוכן שיתוף</Label>
+              <Input value={form.cooperation_agent} onChange={e => upd('cooperation_agent', e.target.value)} />
+            </div>
           </div>
 
           <div className="space-y-1">

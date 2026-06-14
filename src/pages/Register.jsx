@@ -29,7 +29,7 @@ export default function Register() {
       const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { full_name: fullName, role: 'agent' } },
+        options: { data: { full_name: fullName, role: 'admin' } },
       });
       if (signUpError) throw signUpError;
       setShowOtp(true);
@@ -86,7 +86,7 @@ export default function Register() {
     <AuthLayout
       icon={UserPlus}
       title="יצירת חשבון"
-      subtitle="הירשם כסוכן — המנהל יאשר את הגישה שלך"
+      subtitle="יצירת חשבון — תוכל להיכנס מיד לאחר האימות"
       footer={
         <>כבר יש לך חשבון?{" "}
           <Link to="/login" className="text-primary font-medium hover:underline">כניסה</Link>

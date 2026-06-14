@@ -85,7 +85,7 @@ export default function Deals() {
       const computedStatus = computeDealStatus(d);
       const matchSearch = !search || d.client_name?.includes(search) || d.address?.includes(search) || d.agent_name?.includes(search);
       const matchStatus = statusFilter === 'all' || computedStatus === statusFilter;
-      const matchAgent = agentFilter === 'all' || d.agent_id === agentFilter;
+      const matchAgent = agentFilter === 'all' || agentFilter === '__all__' || d.agent_id === agentFilter;
       const matchLawyer = lawyerFilter === 'all' || d.lawyer_name === lawyerFilter;
       const matchCooperation = cooperationFilter === 'all' || d.cooperation_agent === cooperationFilter;
       const month = d.month || '';
@@ -103,25 +103,44 @@ export default function Deals() {
     closedDeals: deals.filter(d => computeDealStatus(d) === 'סגורה').length,
   }), [deals]);
 
-  const filteredStats = useMemo(() => ({
-    totalCommission: filtered.reduce((s, d) => s + (d.commission_amount || 0), 0),
-    totalCollected: filtered.reduce((s, d) => s + (d.collected_actual || 0), 0),
-  }), [filtered]);
+  const VAT_RATE = 0.18;
+
+  const filteredStats = useMemo(() => {
+    const totalCommission = filtered.reduce((s, d) => s + (d.commission_amount || 0), 0);
+    return {
+      totalDeals: filtered.length,
+      closedDeals: filtered.filter(d => computeDealStatus(d) === 'סגורה').length,
+      totalCommission,
+      totalVat: totalCommission * VAT_RATE,
+      totalWithVat: totalCommission * (1 + VAT_RATE),
+      totalCollected: filtered.reduce((s, d) => s + (d.collected_actual || 0), 0),
+    };
+  }, [filtered]);
+
+  const displayStats = hasActiveFilter ? filteredStats : {
+    ...allStats,
+    totalVat: allStats.totalCommission * VAT_RATE,
+    totalWithVat: allStats.totalCommission * (1 + VAT_RATE),
+  };
 
   const exportExcel = () => {
     const wb = XLSX.utils.book_new();
-    const rows = filtered.map(d => ({
-      תאריך: d.month || '',
-      לקוח: d.client_name || '',
-      כתובת: d.address || '',
-      סוכן: d.agent_name || '',
-      'סכום עסקה': d.deal_amount || 0,
-      'עמלה לפני מע״מ': d.commission_amount || 0,
-      נגבה: d.collected_actual || 0,
-      'עמלת סוכן': d.agent_commission || 0,
-      'עמלת משרד': d.office_commission || 0,
-      סטטוס: computeDealStatus(d),
-    }));
+    const rows = filtered.map(d => {
+      const comm = d.commission_amount || 0;
+      return {
+        תאריך: d.month || '',
+        לקוח: d.client_name || '',
+        סוכן: d.agent_name || '',
+        'סכום עסקה': d.deal_amount || 0,
+        'עמלה לפני מע"מ': comm,
+        'מע"מ': +(comm * VAT_RATE).toFixed(2),
+        'סה"כ כולל מע"מ': +(comm * (1 + VAT_RATE)).toFixed(2),
+        נגבה: d.collected_actual || 0,
+        'עמלת סוכן': d.agent_commission || 0,
+        'עמלת משרד': d.office_commission || 0,
+        סטטוס: computeDealStatus(d),
+      };
+    });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'עסקאות');
     XLSX.writeFile(wb, `עסקאות_${new Date().toISOString().slice(0, 10)}.xlsx`);
     toast.success('הקובץ יוצא בהצלחה');
@@ -174,25 +193,25 @@ export default function Deals() {
         <Card className="rounded-2xl">
           <CardContent className="p-4 flex items-center gap-3">
             <div className="p-2 rounded-xl bg-blue-100 text-blue-600"><FileText className="w-5 h-5" /></div>
-            <div><p className="text-xs text-muted-foreground">סה״כ עסקאות</p><p className="text-xl font-bold">{allStats.totalDeals}</p></div>
+            <div><p className="text-xs text-muted-foreground">סה״כ עסקאות</p><p className="text-xl font-bold">{displayStats.totalDeals}</p></div>
           </CardContent>
         </Card>
         <Card className="rounded-2xl">
           <CardContent className="p-4 flex items-center gap-3">
             <div className="p-2 rounded-xl bg-emerald-100 text-emerald-600"><CheckCircle className="w-5 h-5" /></div>
-            <div><p className="text-xs text-muted-foreground">עסקאות סגורות</p><p className="text-xl font-bold">{allStats.closedDeals}</p></div>
+            <div><p className="text-xs text-muted-foreground">עסקאות סגורות</p><p className="text-xl font-bold">{displayStats.closedDeals}</p></div>
           </CardContent>
         </Card>
         <Card className="rounded-2xl">
           <CardContent className="p-4 flex items-center gap-3">
             <div className="p-2 rounded-xl bg-primary/10 text-primary"><TrendingUp className="w-5 h-5" /></div>
-            <div><p className="text-xs text-muted-foreground">סה״כ עמלות</p><p className="text-xl font-bold">{formatCurrency(allStats.totalCommission)}</p></div>
+            <div><p className="text-xs text-muted-foreground">סה״כ עמלות</p><p className="text-xl font-bold">{formatCurrency(displayStats.totalCommission)}</p></div>
           </CardContent>
         </Card>
         <Card className="rounded-2xl">
           <CardContent className="p-4 flex items-center gap-3">
             <div className="p-2 rounded-xl bg-amber-100 text-amber-600"><Wallet className="w-5 h-5" /></div>
-            <div><p className="text-xs text-muted-foreground">סה״כ נגבה</p><p className="text-xl font-bold">{formatCurrency(allStats.totalCollected)}</p></div>
+            <div><p className="text-xs text-muted-foreground">סה״כ נגבה</p><p className="text-xl font-bold">{formatCurrency(displayStats.totalCollected)}</p></div>
           </CardContent>
         </Card>
       </div>
@@ -219,6 +238,7 @@ export default function Deals() {
                 <SelectTrigger className="w-36 rounded-xl"><SelectValue placeholder="סוכן" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">כל הסוכנים</SelectItem>
+                  <SelectItem value="__all__">הצג את כולם</SelectItem>
                   {agents.filter(a => a.is_active).map(a => (
                     <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
                   ))}
@@ -268,6 +288,8 @@ export default function Deals() {
             <div className="text-sm text-muted-foreground flex gap-4 flex-wrap px-1">
               <span>{filtered.length} עסקאות</span>
               <span>עמלות: <strong className="text-foreground">{formatCurrency(filteredStats.totalCommission)}</strong></span>
+              <span>מע"מ: <strong className="text-foreground">{formatCurrency(filteredStats.totalVat)}</strong></span>
+              <span>סה"כ כולל מע"מ: <strong className="text-foreground">{formatCurrency(filteredStats.totalWithVat)}</strong></span>
               <span>נגבה: <strong className="text-emerald-700">{formatCurrency(filteredStats.totalCollected)}</strong></span>
             </div>
           )}
@@ -278,10 +300,11 @@ export default function Deals() {
                   <TableRow className="bg-muted/50">
                     <TableHead className="text-right">תאריך</TableHead>
                     <TableHead className="text-right">לקוח</TableHead>
-                    <TableHead className="text-right">כתובת</TableHead>
                     {isAdminView && <TableHead className="text-right">סוכן</TableHead>}
                     <TableHead className="text-right">סכום עסקה</TableHead>
                     <TableHead className="text-right">עמלה</TableHead>
+                    <TableHead className="text-right">מע"מ</TableHead>
+                    <TableHead className="text-right">סה"כ כולל מע"מ</TableHead>
                     <TableHead className="text-right">נגבה</TableHead>
                     <TableHead className="text-right">% גבייה</TableHead>
                     <TableHead className="text-right">עמלת סוכן</TableHead>
@@ -292,9 +315,9 @@ export default function Deals() {
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
-                    <TableRow><TableCell colSpan={12} className="text-center py-12 text-muted-foreground">טוען...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={isAdminView ? 13 : 11} className="text-center py-12 text-muted-foreground">טוען...</TableCell></TableRow>
                   ) : filtered.length === 0 ? (
-                    <TableRow><TableCell colSpan={12} className="text-center py-12 text-muted-foreground">לא נמצאו עסקאות התואמות את הסינון</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={isAdminView ? 13 : 11} className="text-center py-12 text-muted-foreground">לא נמצאו עסקאות התואמות את הסינון</TableCell></TableRow>
                   ) : filtered.map(deal => {
                     const st = dealStatus(deal);
                     const commPct = deal.commission_amount > 0
@@ -304,10 +327,11 @@ export default function Deals() {
                       <TableRow key={deal.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => setViewDeal(deal)}>
                         <TableCell className="text-sm">{deal.month || '-'}</TableCell>
                         <TableCell className="font-medium text-sm">{deal.client_name}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{deal.address || '-'}</TableCell>
                         {isAdminView && <TableCell className="text-sm">{deal.agent_name || '-'}</TableCell>}
                         <TableCell className="font-semibold text-sm">{formatCurrency(deal.deal_amount)}</TableCell>
                         <TableCell className="text-sm">{formatCurrency(deal.commission_amount)}</TableCell>
+                        <TableCell className="text-sm">{formatCurrency((deal.commission_amount || 0) * VAT_RATE)}</TableCell>
+                        <TableCell className="text-sm font-medium">{formatCurrency((deal.commission_amount || 0) * (1 + VAT_RATE))}</TableCell>
                         <TableCell className="text-sm">{formatCurrency(deal.collected_actual)}</TableCell>
                         <TableCell className="text-sm">
                           <span className={commPct >= 100 ? 'text-emerald-700 font-semibold' : 'text-amber-700'}>

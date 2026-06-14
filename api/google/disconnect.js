@@ -1,6 +1,6 @@
 /**
- * POST /api/google/disconnect
- * Removes Google integration for the authenticated user only.
+ * POST /api/google/disconnect?service=drive|gmail
+ * Removes Google integration for the authenticated user (for the specified service only).
  * Requires: Authorization: Bearer <supabase_access_token>
  */
 import { createClient } from '@supabase/supabase-js';
@@ -13,6 +13,8 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
+  const service = req.query.service;
+
   const supabase = createClient(
     process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -22,6 +24,9 @@ export default async function handler(req, res) {
   const { data: { user }, error } = await supabase.auth.getUser(authHeader.slice(7));
   if (error || !user) return res.status(401).json({ error: 'Unauthorized' });
 
-  await supabase.from('google_integrations').delete().eq('user_id', user.id);
+  let query = supabase.from('google_integrations').delete().eq('user_id', user.id);
+  if (service) query = query.eq('service', service);
+  await query;
+
   return res.status(200).json({ success: true });
 }

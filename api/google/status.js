@@ -1,5 +1,5 @@
 /**
- * GET /api/google/status
+ * GET /api/google/status?service=drive|gmail
  * Returns Google connection status for the authenticated user.
  * Requires: Authorization: Bearer <supabase_access_token>
  */
@@ -10,6 +10,8 @@ export default async function handler(req, res) {
   if (!authHeader?.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
+
+  const service = req.query.service || 'drive';
 
   const supabase = createClient(
     process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL,
@@ -24,17 +26,20 @@ export default async function handler(req, res) {
     .from('google_integrations')
     .select('connected_email, drive_folder_id, created_at')
     .eq('user_id', user.id)
+    .eq('service', service)
     .single();
 
   if (!data) {
     return res.status(200).json({ connected: false });
   }
 
-  const folderUrl = `https://drive.google.com/drive/folders/${data.drive_folder_id}`;
-  return res.status(200).json({
+  const response = {
     connected: true,
     email: data.connected_email,
-    folderUrl,
     connectedAt: data.created_at,
-  });
+  };
+  if (data.drive_folder_id) {
+    response.folderUrl = `https://drive.google.com/drive/folders/${data.drive_folder_id}`;
+  }
+  return res.status(200).json(response);
 }

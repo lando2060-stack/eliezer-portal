@@ -18,11 +18,12 @@ create table if not exists profiles (
 create or replace function handle_new_user()
 returns trigger language plpgsql security definer as $$
 begin
-  insert into profiles (id, full_name, role)
+  insert into profiles (id, full_name, role, is_approved)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'full_name', ''),
-    coalesce(new.raw_user_meta_data->>'role', 'agent')
+    'admin',
+    true
   )
   on conflict (id) do nothing;
   return new;

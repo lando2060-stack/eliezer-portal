@@ -86,6 +86,7 @@ export default async function handler(req, res) {
     .from('google_integrations')
     .select('*')
     .eq('user_id', user.id)
+    .eq('service', 'drive')
     .single();
 
   if (!integration) return res.status(200).json({ skipped: true, reason: 'Drive not connected' });

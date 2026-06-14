@@ -2,9 +2,8 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, BarChart3, Users, FileText, Wallet,
-  Receipt, Settings, LogOut, Building2, Store, BookOpen, X
+  Receipt, Settings, Building2, Store, BookOpen, X
 } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
 
 const navItems = [
   { path: '/admin/dashboard',          label: 'ראשי',         icon: LayoutDashboard },
@@ -65,16 +64,6 @@ export default function AdminSidebar({ mobileOpen = false, onMobileClose }) {
         })}
       </nav>
 
-      {/* Logout */}
-      <div className="p-3 border-t border-sidebar-border">
-        <button
-          onClick={() => base44.auth.logout()}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg w-full text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-all"
-        >
-          <LogOut className="w-4 h-4" />
-          <span className="text-sm">התנתק</span>
-        </button>
-      </div>
     </div>
   );
 

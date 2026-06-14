@@ -1,7 +1,7 @@
 /**
  * GET /api/google/callback
- * Handles OAuth callback from Google, stores tokens per user, creates Drive folder.
- * user_id is carried via the OAuth `state` parameter (base64-encoded).
+ * Handles OAuth callback from Google, stores tokens per user+service, creates Drive folder if needed.
+ * user_id and service are carried via the OAuth `state` parameter (base64-encoded JSON).
  */
 import { createClient } from '@supabase/supabase-js';
 
@@ -64,10 +64,17 @@ export default async function handler(req, res) {
     return res.redirect(`${siteUrl}/settings?drive=error`);
   }
 
-  // Decode user_id from state
-  let userId;
+  let userId, service = 'drive';
   try {
-    userId = Buffer.from(state, 'base64').toString('utf-8');
+    const decoded = Buffer.from(state, 'base64').toString('utf-8');
+    // Support new format { userId, service } and legacy format (plain userId string)
+    if (decoded.startsWith('{')) {
+      const parsed = JSON.parse(decoded);
+      userId = parsed.userId;
+      service = parsed.service || 'drive';
+    } else {
+      userId = decoded;
+    }
     if (!userId) throw new Error('empty user_id');
   } catch {
     return res.redirect(`${siteUrl}/settings?drive=error`);
@@ -83,14 +90,17 @@ export default async function handler(req, res) {
     const redirectUri = `${siteUrl}/api/google/callback`;
     const tokens = await getTokens(code, redirectUri);
     const email = await getConnectedEmail(tokens.access_token);
-    const folderId = await getOrCreateFolder(tokens.access_token);
 
-    // Delete existing integration for this user only
-    await supabase.from('google_integrations').delete().eq('user_id', userId);
+    const folderId = service === 'drive' ? await getOrCreateFolder(tokens.access_token) : null;
+
+    await supabase.from('google_integrations').delete()
+      .eq('user_id', userId)
+      .eq('service', service);
 
     const expiresAt = new Date(Date.now() + (tokens.expires_in || 3600) * 1000).toISOString();
     await supabase.from('google_integrations').insert({
       user_id: userId,
+      service,
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
       expires_at: expiresAt,
@@ -98,7 +108,8 @@ export default async function handler(req, res) {
       connected_email: email,
     });
 
-    return res.redirect(`${siteUrl}/settings?drive=connected`);
+    const paramName = service === 'gmail' ? 'gmail' : 'drive';
+    return res.redirect(`${siteUrl}/settings?${paramName}=connected`);
   } catch (err) {
     console.error('Google OAuth callback error:', err);
     return res.redirect(`${siteUrl}/settings?drive=error`);

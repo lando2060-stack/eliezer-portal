@@ -1,5 +1,5 @@
 /**
- * GET /api/google/auth-url
+ * GET /api/google/auth-url?service=drive|gmail
  * Returns the Google OAuth URL for the authenticated user.
  * Requires: Authorization: Bearer <supabase_access_token>
  */
@@ -20,17 +20,18 @@ export default async function handler(req, res) {
   const { data: { user }, error } = await supabase.auth.getUser(authHeader.slice(7));
   if (error || !user) return res.status(401).json({ error: 'Unauthorized' });
 
+  const service = req.query.service || 'drive';
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const siteUrl = process.env.SITE_URL || 'https://tfila.fyotek.com';
   const redirectUri = `${siteUrl}/api/google/callback`;
 
-  const scope = [
-    'https://www.googleapis.com/auth/drive.file',
-    'https://www.googleapis.com/auth/gmail.readonly',
-  ].join(' ');
+  const scopeMap = {
+    drive: 'https://www.googleapis.com/auth/drive.file',
+    gmail: 'https://www.googleapis.com/auth/gmail.readonly',
+  };
+  const scope = scopeMap[service] || scopeMap.drive;
 
-  // Encode user_id in state so callback knows which user to store tokens for
-  const state = Buffer.from(user.id).toString('base64');
+  const state = Buffer.from(JSON.stringify({ userId: user.id, service })).toString('base64');
 
   const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
   url.searchParams.set('client_id', clientId);

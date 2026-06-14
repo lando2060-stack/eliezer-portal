@@ -904,15 +904,6 @@ function AgentPermissionsTab() {
 
 // ---- Settings Card Grid ----
 const SETTINGS_SECTIONS = {
-  profile: {
-    key: 'profile',
-    title: 'פרופיל',
-    desc: 'שם, סיסמה',
-    icon: User,
-    iconBg: 'bg-blue-50',
-    iconColor: 'text-blue-500',
-    adminOnly: false,
-  },
   integrations: {
     key: 'integrations',
     title: 'חיבורים',
@@ -929,15 +920,6 @@ const SETTINGS_SECTIONS = {
     icon: Tag,
     iconBg: 'bg-amber-50',
     iconColor: 'text-amber-500',
-    adminOnly: true,
-  },
-  permissions: {
-    key: 'permissions',
-    title: 'גישה והרשאות',
-    desc: 'גישה, הרשאות ותפקידים',
-    icon: Shield,
-    iconBg: 'bg-purple-50',
-    iconColor: 'text-purple-500',
     adminOnly: true,
   },
 };
@@ -983,10 +965,8 @@ export default function Settings() {
           </div>
         </div>
 
-        {activeSection === 'profile' && <ProfileTab />}
         {activeSection === 'integrations' && <IntegrationsTab agentPerms={agentPerms} />}
         {activeSection === 'catalog' && admin && <CatalogTab />}
-        {activeSection === 'permissions' && admin && <AgentPermissionsTab />}
       </div>
     );
   }
