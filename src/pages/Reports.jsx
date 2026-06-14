@@ -195,7 +195,7 @@ export default function Reports() {
   };
 
   return (
-    <div className="space-y-6" ref={reportRef}>
+    <div className="space-y-6" dir="rtl" ref={reportRef}>
       {/* Header */}
       <div className="flex items-center flex-wrap gap-3">
         <div className="me-auto">
