@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import { isAdmin } from '@/lib/roles';
 import { formatCurrency, computeDealStatus } from '@/lib/constants';
 
-const SIDES = ['קונה', 'מוכר', 'שני הצדדים'];
+const SIDES = ['קונה', 'מוכר', 'שני הצדדים', 'שוכר', 'משכיר'];
 const VAT_RATE = 0.18;
 
 function getAreas() {
@@ -203,7 +203,7 @@ export default function DealFormDialog({ deal, agents, currentUser, myAgent, onC
 
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1">
-              <Label className="text-xs">צד</Label>
+              <Label className="text-xs">סוג עסקה</Label>
               <Select value={form.side} onValueChange={v => upd('side', v)}>
                 <SelectTrigger><SelectValue placeholder="בחר" /></SelectTrigger>
                 <SelectContent>{SIDES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>

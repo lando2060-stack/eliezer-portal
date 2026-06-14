@@ -33,7 +33,7 @@ export default function Deals() {
   const isAdminView = useIsAdminView();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [agentFilter, setAgentFilter] = useState('all');
+  const [agentFilter, setAgentFilter] = useState('none');
   const [lawyerFilter, setLawyerFilter] = useState('all');
   const [cooperationFilter, setCooperationFilter] = useState('all');
   const [filterMode, setFilterMode] = useState('month');
@@ -97,7 +97,7 @@ export default function Deals() {
       const computedStatus = computeDealStatus(d);
       const matchSearch = !search || d.client_name?.includes(search) || d.address?.includes(search) || d.agent_name?.includes(search);
       const matchStatus = statusFilter === 'all' || computedStatus === statusFilter;
-      const matchAgent = agentFilter === 'all' || agentFilter === '__all__' || d.agent_id === agentFilter;
+      const matchAgent = !isAdminView || agentFilter === 'all' || d.agent_id === agentFilter;
       const matchLawyer = lawyerFilter === 'all' || d.lawyer_name === lawyerFilter;
       const matchCooperation = cooperationFilter === 'all' || d.cooperation_agent === cooperationFilter;
       return matchSearch && matchStatus && matchAgent && matchLawyer && matchCooperation && matchesDate(d.month);
@@ -256,8 +256,8 @@ export default function Deals() {
               <Select value={agentFilter} onValueChange={setAgentFilter}>
                 <SelectTrigger className="w-36 rounded-xl"><SelectValue placeholder="סוכן" /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="none">ללא</SelectItem>
                   <SelectItem value="all">כל הסוכנים</SelectItem>
-                  <SelectItem value="__all__">הצג את כולם</SelectItem>
                   {agents.map(a => (
                     <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
                   ))}

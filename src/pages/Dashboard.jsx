@@ -21,8 +21,6 @@ export default function Dashboard() {
   const isAdminView = useIsAdminView();
 
   const dealsPath  = isAdminView ? '/admin/deals'    : '/deals';
-  const agentsPath = isAdminView ? '/admin/agents'   : '/';
-  const reportsPath = isAdminView ? '/admin/reports' : '/reports';
   const expensesPath = isAdminView ? '/admin/expenses' : '/expenses';
 
   const { data: agents = [] } = useQuery({ queryKey: ['agents'], queryFn: () => base44.entities.Agent.list() });
@@ -99,7 +97,6 @@ export default function Dashboard() {
         <div className="flex items-center gap-3 mb-1">
           <img src="/logo.webp" alt="אליעזר נכסים" className="h-8 object-contain" />
         </div>
-        <h1 className="text-2xl font-bold">שלום, {user?.full_name || 'משתמש'} 👋</h1>
         <p className="text-muted-foreground text-sm mt-1">
           {format(now, 'MM/yyyy')} • {isAdminView ? 'ניהול משרד' : 'פורטל סוכנים'}
         </p>
@@ -292,54 +289,6 @@ export default function Dashboard() {
         )}
       </Card>
 
-      {/* Agent: הכנסות אחרונות */}
-      {!isAdminView && (
-        <Card className="rounded-2xl overflow-hidden">
-          <CardContent className="p-5 pb-2">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold">הכנסות אחרונות</h2>
-              <Link to={reportsPath} className="text-sm text-primary hover:underline">כל ההכנסות</Link>
-            </div>
-          </CardContent>
-          {deals.slice(0, 5).length === 0 ? (
-            <p className="text-center py-4 text-muted-foreground text-sm">אין הכנסות עדיין</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50">
-                    <TableHead className="text-right">חודש</TableHead>
-                    <TableHead className="text-right">לקוח</TableHead>
-                    <TableHead className="text-right">סכום עסקה</TableHead>
-                    <TableHead className="text-right">לפני מע"מ</TableHead>
-                    <TableHead className="text-right">סה"כ מע"מ</TableHead>
-                    <TableHead className="text-right">אחרי מע"מ</TableHead>
-                    <TableHead className="text-right">עמלת סוכן</TableHead>
-                    <TableHead className="text-right">סטטוס</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {deals.slice(0, 5).map(d => {
-                    const st = DEAL_STATUS_MAP[d.status] || DEAL_STATUS_MAP['פתוחה'];
-                    return (
-                      <TableRow key={d.id}>
-                        <TableCell className="text-sm">{d.month || '-'}</TableCell>
-                        <TableCell className="font-medium text-sm">{d.client_name}</TableCell>
-                        <TableCell className="text-sm">{formatCurrency(d.deal_amount)}</TableCell>
-                        <TableCell className="text-sm font-semibold">{formatCurrency(d.commission_amount)}</TableCell>
-                        <TableCell className="text-sm">{formatCurrency((d.commission_amount || 0) * VAT_RATE)}</TableCell>
-                        <TableCell className="text-sm font-medium">{formatCurrency((d.commission_amount || 0) * (1 + VAT_RATE))}</TableCell>
-                        <TableCell className="text-sm text-emerald-700">{formatCurrency(d.agent_commission)}</TableCell>
-                        <TableCell><Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge></TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </Card>
-      )}
 
       {/* Agent: הוצאות אחרונות */}
       {!isAdminView && (
@@ -388,58 +337,6 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Admin: הכנסות אחרונות */}
-      {isAdminView && (
-        <Card className="rounded-2xl overflow-hidden">
-          <CardContent className="p-5 pb-2">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold">הכנסות אחרונות</h2>
-              <Link to={reportsPath} className="text-sm text-primary hover:underline">כל ההכנסות</Link>
-            </div>
-          </CardContent>
-          {allDeals.slice(0, 5).length === 0 ? (
-            <p className="text-center py-4 text-muted-foreground text-sm">אין עסקאות עדיין</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50">
-                    <TableHead className="text-right">חודש</TableHead>
-                    <TableHead className="text-right">לקוח</TableHead>
-                    <TableHead className="text-right">סוכן</TableHead>
-                    <TableHead className="text-right">סכום עסקה</TableHead>
-                    <TableHead className="text-right">לפני מע"מ</TableHead>
-                    <TableHead className="text-right">סה"כ מע"מ</TableHead>
-                    <TableHead className="text-right">אחרי מע"מ</TableHead>
-                    <TableHead className="text-right">עמלת סוכן</TableHead>
-                    <TableHead className="text-right">עמלת משרד</TableHead>
-                    <TableHead className="text-right">סטטוס</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {allDeals.slice(0, 5).map(d => {
-                    const st = DEAL_STATUS_MAP[d.status] || DEAL_STATUS_MAP['פתוחה'];
-                    return (
-                      <TableRow key={d.id}>
-                        <TableCell className="text-sm">{d.month || '-'}</TableCell>
-                        <TableCell className="font-medium text-sm">{d.client_name}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{d.agent_name || '-'}</TableCell>
-                        <TableCell className="text-sm">{formatCurrency(d.deal_amount)}</TableCell>
-                        <TableCell className="text-sm font-semibold">{formatCurrency(d.commission_amount)}</TableCell>
-                        <TableCell className="text-sm">{formatCurrency((d.commission_amount || 0) * VAT_RATE)}</TableCell>
-                        <TableCell className="text-sm font-medium">{formatCurrency((d.commission_amount || 0) * (1 + VAT_RATE))}</TableCell>
-                        <TableCell className="text-sm text-emerald-700">{formatCurrency(d.agent_commission)}</TableCell>
-                        <TableCell className="text-sm text-primary font-medium">{formatCurrency(d.office_commission)}</TableCell>
-                        <TableCell><Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge></TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </Card>
-      )}
 
       {/* Admin: הוצאות אחרונות */}
       {isAdminView && (

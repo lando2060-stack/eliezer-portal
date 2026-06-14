@@ -83,7 +83,7 @@ export default function DealDetailDialog({ deal, agents, currentUser, onEdit, on
               <InfoRow label="לקוח" value={deal.client_name} />
               <InfoRow label="כתובת" value={deal.address} />
               <InfoRow label="אזור" value={deal.area} />
-              <InfoRow label="צד" value={deal.side} />
+              <InfoRow label="סוג עסקה" value={deal.side} />
               <InfoRow label="חודש" value={deal.month} />
               <InfoRow label="מקור ליד" value={deal.lead_source} />
             </div>

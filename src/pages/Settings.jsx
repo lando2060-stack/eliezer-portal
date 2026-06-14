@@ -886,6 +886,15 @@ function AgentPermissionsTab() {
 
 // ---- Settings Card Grid ----
 const SETTINGS_SECTIONS = {
+  profile: {
+    key: 'profile',
+    title: 'פרופיל וסיסמה',
+    desc: 'עריכת פרטים אישיים ושינוי סיסמה',
+    icon: User,
+    iconBg: 'bg-blue-50',
+    iconColor: 'text-blue-500',
+    adminOnly: false,
+  },
   integrations: {
     key: 'integrations',
     title: 'חיבורים',
@@ -947,6 +956,7 @@ export default function Settings() {
           </div>
         </div>
 
+        {activeSection === 'profile' && <ProfileTab />}
         {activeSection === 'integrations' && <IntegrationsTab />}
         {activeSection === 'catalog' && admin && <CatalogTab />}
       </div>
@@ -977,6 +987,16 @@ export default function Settings() {
             </button>
           );
         })}
+      </div>
+
+      <div className="pt-4 border-t border-border">
+        <button
+          onClick={() => base44.auth.logout()}
+          className="flex items-center gap-3 px-4 py-3 rounded-2xl text-destructive hover:bg-destructive/5 border border-destructive/20 transition-colors w-full sm:w-auto"
+        >
+          <LogOut className="w-5 h-5" />
+          <span className="font-medium">יציאה מהמערכת</span>
+        </button>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, FileText, Receipt, Wallet, Settings, Plus, X, DollarSign, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, FileText, Receipt, Plus, X, TrendingUp } from 'lucide-react';
 import ReceiptReviewDialog from '@/components/ReceiptReviewDialog';
 import { useAgentPermissions } from '@/hooks/useAgentPermissions';
 
@@ -8,7 +8,6 @@ const navItems = [
   { path: '/',         label: 'דשבורד',  icon: LayoutDashboard },
   { path: '/deals',    label: 'עסקאות',  icon: FileText },
   { path: '/',         label: '',         icon: LayoutDashboard },
-  { path: '/reports',  label: 'הכנסות',  icon: Wallet },
   { path: '/expenses', label: 'הוצאות',  icon: Receipt },
 ];
 
