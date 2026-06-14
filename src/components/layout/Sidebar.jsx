@@ -9,7 +9,6 @@ import { base44 } from '@/api/base44Client';
 
 const navItems = [
   { path: '/', label: 'דשבורד', icon: LayoutDashboard },
-  { path: '/expenses', label: 'הוצאות', icon: Receipt },
   { path: '/upload', label: 'העלאת קבלה', icon: Upload },
   { path: '/vendors', label: 'ספקים', icon: Building2 },
   { path: '/categories', label: 'קטגוריות', icon: Tag },
