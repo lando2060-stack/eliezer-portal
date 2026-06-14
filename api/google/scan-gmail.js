@@ -58,7 +58,7 @@ async function getLabelId(accessToken, labelName) {
   return label?.id || null;
 }
 
-async function listMessages(accessToken, maxResults = 200) {
+async function listMessages(accessToken, maxResults = 50) {
   // Scan only the "חשבוניות" label — if it doesn't exist fall back to attachment search
   const labelId = await getLabelId(accessToken, 'חשבוניות');
 
@@ -157,8 +157,10 @@ export default async function handler(req, res) {
     const newMessages = messages.filter(m => !processedSet.has(m.id));
 
     let created = 0;
+    const deadline = Date.now() + 8000; // stop before Vercel's 10s timeout
 
     for (const msg of newMessages) {
+      if (Date.now() > deadline) break;
       try {
         const message = await getMessage(accessToken, msg.id);
         const parts = extractAttachmentParts(message.payload);
