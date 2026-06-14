@@ -295,9 +295,6 @@ export default function Expenses() {
         <Button variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={exportPDF} disabled={exporting}>
           {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} PDF
         </Button>
-        <Button className="gap-1.5 rounded-xl" onClick={() => setShowAddModal(true)}>
-          <Plus className="w-4 h-4" /> הוצאה חדשה
-        </Button>
       </div>
 
       {/* Summary tiles */}
@@ -344,7 +341,7 @@ export default function Expenses() {
         <TabsContent value="expenses" className="mt-4 space-y-4">
           <Card className="rounded-2xl">
             <CardContent className="p-4 space-y-3">
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3" dir="rtl">
                 <div className="flex rounded-xl border overflow-hidden shrink-0">
                   {[['month', 'חודש'], ['range', 'טווח'], ['year', 'שנה']].map(([mode, label]) => (
                     <button key={mode} onClick={() => setFilterMode(mode)}
