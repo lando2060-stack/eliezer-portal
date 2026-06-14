@@ -48,21 +48,27 @@ async function getValidAccessToken(integration, supabase) {
   return integration.access_token;
 }
 
-async function listMessages(accessToken, maxResults = 40) {
-  // Target only financial documents: match subject OR sender patterns common for invoices/receipts
-  const q = [
-    'has:attachment',
-    'newer_than:30d',
-    '(',
-      'subject:(חשבונית OR קבלה OR "חשבונית מס" OR invoice OR receipt OR billing OR "tax invoice" OR חיוב OR "פירוט חיוב" OR "אישור תשלום" OR "הוראת קבע")',
-      'OR from:(invoice OR billing OR receipt OR accounts OR חשבונות OR חשבוניות)',
-    ')',
-    // Exclude social, promotional, and notification noise
-    '-category:promotions',
-    '-category:social',
-    '-subject:(newsletter OR unsubscribe OR "click here" OR "verify your" OR "reset password" OR OTP OR code OR verification OR ניוזלטר)',
-  ].join(' ');
-  const params = new URLSearchParams({ q, maxResults });
+async function getLabelId(accessToken, labelName) {
+  const res = await fetch(
+    'https://gmail.googleapis.com/gmail/v1/users/me/labels',
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const data = await res.json();
+  const label = (data.labels || []).find(l => l.name === labelName);
+  return label?.id || null;
+}
+
+async function listMessages(accessToken, maxResults = 200) {
+  // Scan only the "חשבוניות" label — if it doesn't exist fall back to attachment search
+  const labelId = await getLabelId(accessToken, 'חשבוניות');
+
+  const params = new URLSearchParams({ maxResults });
+  if (labelId) {
+    params.set('labelIds', labelId);
+  } else {
+    params.set('q', 'has:attachment newer_than:30d label:חשבוניות');
+  }
+
   const res = await fetch(
     `https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -157,12 +163,14 @@ export default async function handler(req, res) {
         const message = await getMessage(accessToken, msg.id);
         const parts = extractAttachmentParts(message.payload);
 
-        // Secondary filter: skip if no attachments look like financial documents
-        const financialKeywords = ['חשבונית', 'קבלה', 'invoice', 'receipt', 'bill', 'tax', 'payment', 'פירוט', 'חיוב'];
-        const subjectValue = message.payload?.headers?.find(h => h.name === 'Subject')?.value?.toLowerCase() || '';
-        const fromValue = message.payload?.headers?.find(h => h.name === 'From')?.value?.toLowerCase() || '';
-        const hasFinancialSignal = financialKeywords.some(k => subjectValue.includes(k) || fromValue.includes(k));
-        if (!hasFinancialSignal && parts.length === 0) continue;
+        // Skip messages with no processable attachments
+        if (parts.length === 0) {
+          await supabase.from('processed_gmail_messages').upsert(
+            { user_id: user.id, message_id: msg.id },
+            { onConflict: 'user_id,message_id', ignoreDuplicates: true }
+          );
+          continue;
+        }
 
         for (const part of parts.slice(0, 2)) {
           try {
