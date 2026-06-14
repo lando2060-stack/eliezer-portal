@@ -96,11 +96,19 @@ async function getAttachmentData(accessToken, messageId, attachmentId) {
 
 function extractAttachmentParts(payload, parts = []) {
   if (payload.filename && payload.body?.attachmentId && ALLOWED_MIME.has(payload.mimeType)) {
-    parts.push({
-      filename: payload.filename,
-      mimeType: payload.mimeType,
-      attachmentId: payload.body.attachmentId,
-    });
+    const disposition = (payload.headers?.find(h => h.name.toLowerCase() === 'content-disposition')?.value || '').toLowerCase();
+    const isPdf = payload.mimeType === 'application/pdf';
+    const isExplicitAttachment = disposition.startsWith('attachment');
+    // PDFs always included; images only if explicitly attached (skip inline logos/signatures)
+    if (!isPdf && !isExplicitAttachment) {
+      // skip inline image
+    } else {
+      parts.push({
+        filename: payload.filename,
+        mimeType: payload.mimeType,
+        attachmentId: payload.body.attachmentId,
+      });
+    }
   }
   if (payload.parts) {
     for (const part of payload.parts) extractAttachmentParts(part, parts);
