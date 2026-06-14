@@ -63,6 +63,8 @@ export default function Dashboard() {
 
   const { monthDeals, totalCommission, totalCollected, totalAgentCommission, totalOfficeCommission, totalPaidToAgent, pendingExpenses, totalMonthExpenses } = stats;
 
+  const VAT_RATE = 0.18;
+
   const monthlyChart = useMemo(() => {
     return Array.from({ length: 6 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
@@ -256,7 +258,9 @@ export default function Dashboard() {
                   <TableHead className="text-right">תאריך</TableHead>
                   <TableHead className="text-right">לקוח</TableHead>
                   {isAdminView && <TableHead className="text-right">סוכן</TableHead>}
-                  <TableHead className="text-right">עמלה</TableHead>
+                  <TableHead className="text-right">לפני מע"מ</TableHead>
+                  <TableHead className="text-right">סה"כ מע"מ</TableHead>
+                  <TableHead className="text-right">אחרי מע"מ</TableHead>
                   <TableHead className="text-right">עמלת סוכן</TableHead>
                   {isAdminView && <TableHead className="text-right">עמלת משרד</TableHead>}
                   <TableHead className="text-right">סטטוס</TableHead>
@@ -274,6 +278,8 @@ export default function Dashboard() {
                       </TableCell>
                       {isAdminView && <TableCell className="text-sm">{d.agent_name || '-'}</TableCell>}
                       <TableCell className="text-sm font-semibold">{formatCurrency(d.commission_amount)}</TableCell>
+                      <TableCell className="text-sm">{formatCurrency((d.commission_amount || 0) * VAT_RATE)}</TableCell>
+                      <TableCell className="text-sm font-medium">{formatCurrency((d.commission_amount || 0) * (1 + VAT_RATE))}</TableCell>
                       <TableCell className="text-sm text-emerald-700">{formatCurrency(d.agent_commission)}</TableCell>
                       {isAdminView && <TableCell className="text-sm text-primary font-medium">{formatCurrency(d.office_commission)}</TableCell>}
                       <TableCell><Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge></TableCell>
@@ -305,7 +311,9 @@ export default function Dashboard() {
                     <TableHead className="text-right">חודש</TableHead>
                     <TableHead className="text-right">לקוח</TableHead>
                     <TableHead className="text-right">סכום עסקה</TableHead>
-                    <TableHead className="text-right">עמלה</TableHead>
+                    <TableHead className="text-right">לפני מע"מ</TableHead>
+                    <TableHead className="text-right">סה"כ מע"מ</TableHead>
+                    <TableHead className="text-right">אחרי מע"מ</TableHead>
                     <TableHead className="text-right">עמלת סוכן</TableHead>
                     <TableHead className="text-right">סטטוס</TableHead>
                   </TableRow>
@@ -319,6 +327,8 @@ export default function Dashboard() {
                         <TableCell className="font-medium text-sm">{d.client_name}</TableCell>
                         <TableCell className="text-sm">{formatCurrency(d.deal_amount)}</TableCell>
                         <TableCell className="text-sm font-semibold">{formatCurrency(d.commission_amount)}</TableCell>
+                        <TableCell className="text-sm">{formatCurrency((d.commission_amount || 0) * VAT_RATE)}</TableCell>
+                        <TableCell className="text-sm font-medium">{formatCurrency((d.commission_amount || 0) * (1 + VAT_RATE))}</TableCell>
                         <TableCell className="text-sm text-emerald-700">{formatCurrency(d.agent_commission)}</TableCell>
                         <TableCell><Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge></TableCell>
                       </TableRow>
@@ -349,7 +359,9 @@ export default function Dashboard() {
                   <TableRow className="bg-muted/50">
                     <TableHead className="text-right">תאריך</TableHead>
                     <TableHead className="text-right">ספק</TableHead>
-                    <TableHead className="text-right">סכום</TableHead>
+                    <TableHead className="text-right">לפני מע"מ</TableHead>
+                    <TableHead className="text-right">סה"כ מע"מ</TableHead>
+                    <TableHead className="text-right">אחרי מע"מ</TableHead>
                     <TableHead className="text-right">קטגוריה</TableHead>
                     <TableHead className="text-right">סטטוס</TableHead>
                   </TableRow>
@@ -361,6 +373,8 @@ export default function Dashboard() {
                       <TableRow key={e.id}>
                         <TableCell className="text-sm">{e.date ? format(new Date(e.date), 'dd/MM/yyyy') : '-'}</TableCell>
                         <TableCell className="font-medium text-sm">{e.vendor_name || '-'}</TableCell>
+                        <TableCell className="text-sm">{formatCurrency(e.amount_before_vat || 0)}</TableCell>
+                        <TableCell className="text-sm">{formatCurrency(e.vat_amount || 0)}</TableCell>
                         <TableCell className="font-semibold text-sm">{formatCurrency(e.total_amount)}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{e.category || '-'}</TableCell>
                         <TableCell><Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge></TableCell>
@@ -394,7 +408,9 @@ export default function Dashboard() {
                     <TableHead className="text-right">לקוח</TableHead>
                     <TableHead className="text-right">סוכן</TableHead>
                     <TableHead className="text-right">סכום עסקה</TableHead>
-                    <TableHead className="text-right">עמלה</TableHead>
+                    <TableHead className="text-right">לפני מע"מ</TableHead>
+                    <TableHead className="text-right">סה"כ מע"מ</TableHead>
+                    <TableHead className="text-right">אחרי מע"מ</TableHead>
                     <TableHead className="text-right">עמלת סוכן</TableHead>
                     <TableHead className="text-right">עמלת משרד</TableHead>
                     <TableHead className="text-right">סטטוס</TableHead>
@@ -410,6 +426,8 @@ export default function Dashboard() {
                         <TableCell className="text-sm text-muted-foreground">{d.agent_name || '-'}</TableCell>
                         <TableCell className="text-sm">{formatCurrency(d.deal_amount)}</TableCell>
                         <TableCell className="text-sm font-semibold">{formatCurrency(d.commission_amount)}</TableCell>
+                        <TableCell className="text-sm">{formatCurrency((d.commission_amount || 0) * VAT_RATE)}</TableCell>
+                        <TableCell className="text-sm font-medium">{formatCurrency((d.commission_amount || 0) * (1 + VAT_RATE))}</TableCell>
                         <TableCell className="text-sm text-emerald-700">{formatCurrency(d.agent_commission)}</TableCell>
                         <TableCell className="text-sm text-primary font-medium">{formatCurrency(d.office_commission)}</TableCell>
                         <TableCell><Badge variant="secondary" className={`text-xs ${st.color}`}>{st.label}</Badge></TableCell>
@@ -441,7 +459,9 @@ export default function Dashboard() {
                   <TableRow className="bg-muted/50">
                     <TableHead className="text-right">תאריך</TableHead>
                     <TableHead className="text-right">ספק</TableHead>
-                    <TableHead className="text-right">סכום</TableHead>
+                    <TableHead className="text-right">לפני מע"מ</TableHead>
+                    <TableHead className="text-right">סה"כ מע"מ</TableHead>
+                    <TableHead className="text-right">אחרי מע"מ</TableHead>
                     <TableHead className="text-right">קטגוריה</TableHead>
                     <TableHead className="text-right">סוכן</TableHead>
                     <TableHead className="text-right">סטטוס</TableHead>
@@ -455,6 +475,8 @@ export default function Dashboard() {
                       <TableRow key={e.id}>
                         <TableCell className="text-sm">{e.date ? format(new Date(e.date), 'dd/MM/yyyy') : '-'}</TableCell>
                         <TableCell className="font-medium text-sm">{e.vendor_name || '-'}</TableCell>
+                        <TableCell className="text-sm">{formatCurrency(e.amount_before_vat || 0)}</TableCell>
+                        <TableCell className="text-sm">{formatCurrency(e.vat_amount || 0)}</TableCell>
                         <TableCell className="font-semibold text-sm">{formatCurrency(e.total_amount)}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{e.category || '-'}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{e.agent_name || '-'}</TableCell>

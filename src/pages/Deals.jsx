@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, MoreVertical, Pencil, Trash2, FileSpreadsheet, Download, Loader2, Plus, FileText, TrendingUp, Wallet, CheckCircle } from 'lucide-react';
+import { Search, MoreVertical, Pencil, Trash2, FileSpreadsheet, Download, Loader2, Plus, FileText, TrendingUp, Wallet, CheckCircle, Receipt } from 'lucide-react';
 import { formatCurrency, DEAL_STATUS_MAP, computeDealStatus } from '@/lib/constants';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useIsAdminView } from '@/hooks/useIsAdminView';
@@ -54,7 +54,7 @@ export default function Deals() {
       setEditDeal({});
       setSearchParams({}, { replace: true });
     }
-  }, []);
+  }, [searchParams]);
 
   const { data: agents = [] } = useQuery({
     queryKey: ['agents'],
@@ -202,23 +202,29 @@ export default function Deals() {
       </div>
 
       {/* Summary tiles */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <Card className="rounded-2xl">
           <CardContent className="p-4 flex items-center gap-3">
             <div className="p-2 rounded-xl bg-blue-100 text-blue-600"><FileText className="w-5 h-5" /></div>
             <div><p className="text-xs text-muted-foreground">סה״כ עסקאות</p><p className="text-xl font-bold">{displayStats.totalDeals}</p></div>
           </CardContent>
         </Card>
-        <Card className="rounded-2xl">
+<Card className="rounded-2xl">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-emerald-100 text-emerald-600"><CheckCircle className="w-5 h-5" /></div>
-            <div><p className="text-xs text-muted-foreground">עסקאות סגורות</p><p className="text-xl font-bold">{displayStats.closedDeals}</p></div>
+            <div className="p-2 rounded-xl bg-primary/10 text-primary"><TrendingUp className="w-5 h-5" /></div>
+            <div><p className="text-xs text-muted-foreground">סה״כ עמלות</p><p className="text-xl font-bold">{formatCurrency(displayStats.totalCommission)}</p></div>
           </CardContent>
         </Card>
         <Card className="rounded-2xl">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-primary/10 text-primary"><TrendingUp className="w-5 h-5" /></div>
-            <div><p className="text-xs text-muted-foreground">סה״כ עמלות</p><p className="text-xl font-bold">{formatCurrency(displayStats.totalCommission)}</p></div>
+            <div className="p-2 rounded-xl bg-violet-100 text-violet-600"><Receipt className="w-5 h-5" /></div>
+            <div><p className="text-xs text-muted-foreground">מע״מ</p><p className="text-xl font-bold">{formatCurrency(displayStats.totalVat)}</p></div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-2xl">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-indigo-100 text-indigo-600"><TrendingUp className="w-5 h-5" /></div>
+            <div><p className="text-xs text-muted-foreground">סה״כ כולל מע״מ</p><p className="text-xl font-bold">{formatCurrency(displayStats.totalWithVat)}</p></div>
           </CardContent>
         </Card>
         <Card className="rounded-2xl">
@@ -310,15 +316,6 @@ export default function Deals() {
 
       {/* Table */}
       <>
-          {filtered.length > 0 && (
-            <div className="text-sm text-muted-foreground flex gap-4 flex-wrap px-1">
-              <span>{filtered.length} עסקאות</span>
-              <span>עמלות: <strong className="text-foreground">{formatCurrency(filteredStats.totalCommission)}</strong></span>
-              <span>מע"מ: <strong className="text-foreground">{formatCurrency(filteredStats.totalVat)}</strong></span>
-              <span>סה"כ כולל מע"מ: <strong className="text-foreground">{formatCurrency(filteredStats.totalWithVat)}</strong></span>
-              <span>נגבה: <strong className="text-emerald-700">{formatCurrency(filteredStats.totalCollected)}</strong></span>
-            </div>
-          )}
           <Card className="rounded-2xl overflow-hidden" ref={tableRef}>
             <div className="overflow-x-auto">
               <Table>
