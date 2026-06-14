@@ -175,7 +175,7 @@ function GmailInboxTab({ inboxExpenses, isLoading, onDelete, isAdminView }) {
             <TableRow className="bg-muted/50">
               <TableHead className="text-right">קובץ / נושא</TableHead>
               <TableHead className="text-right">פרטי מייל</TableHead>
-              <TableHead className="text-right">הגיע</TableHead>
+              <TableHead className="text-right">תאריך מייל</TableHead>
               <TableHead className="w-32"></TableHead>
             </TableRow>
           </TableHeader>
@@ -192,7 +192,7 @@ function GmailInboxTab({ inboxExpenses, isLoading, onDelete, isAdminView }) {
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground max-w-[240px] truncate">{expense.notes || '-'}</TableCell>
                 <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                  {expense.created_at ? format(new Date(expense.created_at), 'dd/MM/yy HH:mm') : '-'}
+                  {expense.date ? format(new Date(expense.date), 'dd/MM/yyyy') : '-'}
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-1.5">
