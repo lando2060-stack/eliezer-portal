@@ -73,11 +73,11 @@ export const AuthProvider = ({ children }) => {
     await supabase.auth.signOut();
     setUser(null);
     setIsAuthenticated(false);
-    window.location.href = '/admin/dashboard';
+    window.location.href = '/login';
   };
 
   const navigateToLogin = () => {
-    window.location.href = '/admin/dashboard';
+    window.location.href = '/login';
   };
 
   return (
