@@ -197,14 +197,18 @@ export default async function handler(req, res) {
             const subjectHeader = message.payload?.headers?.find(h => h.name === 'Subject');
             const fromHeader = message.payload?.headers?.find(h => h.name === 'From');
             const dateHeader = message.payload?.headers?.find(h => h.name === 'Date');
+            const emailDate = dateHeader?.value ? (() => {
+              const d = new Date(dateHeader.value);
+              return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+            })() : null;
             await supabase.from('expenses').insert({
               receipt_url: fileUrl,
               has_receipt: true,
               status: 'gmail_inbox',
+              date: emailDate,
               notes: [
                 subjectHeader?.value ? `נושא: ${subjectHeader.value}` : '',
                 fromHeader?.value ? `מאת: ${fromHeader.value}` : '',
-                dateHeader?.value ? `תאריך: ${dateHeader.value}` : '',
               ].filter(Boolean).join(' | ') || 'ממייל — ממתין לחילוץ פרטים',
               currency: 'ILS',
               created_by_id: user.id,
