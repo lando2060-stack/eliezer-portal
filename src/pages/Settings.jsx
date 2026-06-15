@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, RefreshCw, Building2, Tag, Pencil, Mail, HardDrive, LogOut, User, KeyRound, Loader2, MapPin, CheckCircle2, Clock, UserCheck, Shield, ExternalLink } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Building2, Tag, Pencil, Mail, HardDrive, User, KeyRound, Loader2, MapPin, CheckCircle2, Clock, UserCheck, Shield, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { PAYMENT_METHODS } from '@/lib/constants';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
@@ -171,15 +171,22 @@ function VendorsTab() {
 // ---- Categories Tab ----
 function CategoriesTab() {
   const queryClient = useQueryClient();
-  const [editCat, setEditCat] = useState(null);
-  const [name, setName] = useState('');
-  const [color, setColor] = useState(COLORS[0]);
-
   const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: () => base44.entities.Category.list() });
 
-  const saveC = useMutation({
-    mutationFn: () => editCat?.id ? base44.entities.Category.update(editCat.id, { name, color }) : base44.entities.Category.create({ name, color, is_default: false }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['categories'] }); toast.success(editCat?.id ? 'קטגוריה עודכנה' : 'קטגוריה נוצרה'); setEditCat(null); },
+  const [newName, setNewName] = useState('');
+  const [newColor, setNewColor] = useState(COLORS[0]);
+  const [editId, setEditId] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editColor, setEditColor] = useState(COLORS[0]);
+
+  const createC = useMutation({
+    mutationFn: () => base44.entities.Category.create({ name: newName.trim(), color: newColor, is_default: false }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['categories'] }); toast.success('הקטגוריה נוספה'); setNewName(''); setNewColor(COLORS[0]); },
+    onError: () => toast.error('שגיאה ביצירת הקטגוריה'),
+  });
+  const updateC = useMutation({
+    mutationFn: ({ id, name, color }) => base44.entities.Category.update(id, { name, color }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['categories'] }); setEditId(null); },
     onError: () => toast.error('שגיאה בשמירת הקטגוריה'),
   });
   const deleteC = useMutation({
@@ -188,49 +195,53 @@ function CategoriesTab() {
     onError: () => toast.error('שגיאה במחיקת הקטגוריה'),
   });
 
-  const openEdit = (cat) => { setEditCat(cat || {}); setName(cat?.name || ''); setColor(cat?.color || COLORS[0]); };
+  const add = () => { if (!newName.trim()) return; createC.mutate(); };
+  const openEdit = (cat) => { setEditId(cat.id); setEditName(cat.name); setEditColor(cat.color || COLORS[0]); };
+  const saveEdit = () => { if (!editName.trim()) return; updateC.mutate({ id: editId, name: editName.trim(), color: editColor }); };
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button onClick={() => openEdit(null)} className="gap-2 rounded-xl"><Plus className="w-4 h-4" /> קטגוריה חדשה</Button>
+    <div className="space-y-4 max-w-md">
+      <div className="space-y-2 p-3 bg-muted/50 rounded-xl">
+        <div className="flex gap-2">
+          <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="שם קטגוריה חדשה" onKeyDown={e => e.key === 'Enter' && add()} className="rounded-xl bg-background" />
+          <Button onClick={add} disabled={createC.isPending} className="gap-2 rounded-xl"><Plus className="w-4 h-4" /> הוסף</Button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {COLORS.map(c => (
+            <button key={c} className={`w-6 h-6 rounded-lg transition-all ${newColor === c ? 'ring-2 ring-offset-1 ring-primary scale-110' : ''}`} style={{ backgroundColor: c }} onClick={() => setNewColor(c)} />
+          ))}
+        </div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="space-y-2">
         {categories.map(cat => (
-          <Card key={cat.id} className="rounded-2xl hover:shadow-md transition-shadow group">
-            <CardContent className="p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: cat.color + '20' }}>
-                  <Tag className="w-4 h-4" style={{ color: cat.color }} />
+          <div key={cat.id} className="flex items-center gap-2 p-3 bg-muted/50 rounded-xl">
+            {editId === cat.id ? (
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Input value={editName} onChange={e => setEditName(e.target.value)} className="flex-1 h-8" autoFocus />
+                  <Button size="sm" onClick={saveEdit} disabled={updateC.isPending}>שמור</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setEditId(null)}>ביטול</Button>
                 </div>
-                <span className="font-medium">{cat.name}</span>
+                <div className="flex flex-wrap gap-2">
+                  {COLORS.map(c => (
+                    <button key={c} className={`w-6 h-6 rounded-lg transition-all ${editColor === c ? 'ring-2 ring-offset-1 ring-primary scale-110' : ''}`} style={{ backgroundColor: c }} onClick={() => setEditColor(c)} />
+                  ))}
+                </div>
               </div>
-              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            ) : (
+              <>
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: cat.color + '20' }}>
+                  <Tag className="w-3.5 h-3.5" style={{ color: cat.color }} />
+                </div>
+                <span className="flex-1 text-sm">{cat.name}</span>
                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(cat)}><Pencil className="w-3.5 h-3.5" /></Button>
                 <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => { if (window.confirm(`למחוק את הקטגוריה "${cat.name}"? פעולה זו אינה ניתנת לביטול.`)) deleteC.mutate(cat.id); }}><Trash2 className="w-3.5 h-3.5" /></Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <Dialog open={!!editCat} onOpenChange={() => setEditCat(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>{editCat?.id ? 'עריכת קטגוריה' : 'קטגוריה חדשה'}</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-1.5"><Label>שם הקטגוריה</Label><Input value={name} onChange={e => setName(e.target.value)} /></div>
-            <div className="space-y-1.5">
-              <Label>צבע</Label>
-              <div className="flex flex-wrap gap-2">
-                {COLORS.map(c => (
-                  <button key={c} className={`w-8 h-8 rounded-lg transition-all ${color === c ? 'ring-2 ring-offset-2 ring-primary scale-110' : ''}`} style={{ backgroundColor: c }} onClick={() => setColor(c)} />
-                ))}
-              </div>
-            </div>
-            <Button onClick={() => saveC.mutate()} disabled={!name || saveC.isPending} className="w-full rounded-xl">שמור</Button>
+              </>
+            )}
           </div>
-        </DialogContent>
-      </Dialog>
+        ))}
+        {categories.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">אין קטגוריות</p>}
+      </div>
     </div>
   );
 }
@@ -839,7 +850,7 @@ function AgentPermissionsTab() {
 const SETTINGS_SECTIONS = {
   profile: {
     key: 'profile',
-    title: 'פרופיל וסיסמה',
+    title: 'סיסמה',
     desc: 'עריכת פרטים אישיים ושינוי סיסמה',
     icon: User,
     iconBg: 'bg-blue-50',
@@ -918,7 +929,7 @@ export default function Settings() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">הגדרות</h1>
-        <p className="text-sm text-muted-foreground mt-1">הגדרות מערכת ובית כנסת</p>
+        <p className="text-sm text-muted-foreground mt-1">הגדרות מערכת</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -938,16 +949,6 @@ export default function Settings() {
             </button>
           );
         })}
-      </div>
-
-      <div className="pt-4 border-t border-border">
-        <button
-          onClick={() => base44.auth.logout()}
-          className="flex items-center gap-3 px-4 py-3 rounded-2xl text-destructive hover:bg-destructive/5 border border-destructive/20 transition-colors w-full sm:w-auto"
-        >
-          <LogOut className="w-5 h-5" />
-          <span className="font-medium">יציאה מהמערכת</span>
-        </button>
       </div>
     </div>
   );
