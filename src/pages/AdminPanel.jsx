@@ -352,18 +352,6 @@ function PendingAgentsTab() {
     mutationFn: async (agent) => {
       const { error } = await supabase.from('profiles').update({ is_approved: true }).eq('id', agent.id);
       if (error) throw error;
-      // שלח מייל אישור — best effort, לא חוסם
-      try {
-        const { data: authUser } = await supabase.auth.admin?.getUserById?.(agent.id) || {};
-        const email = authUser?.user?.email;
-        if (email) {
-          await fetch('/api/send-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ to: email, type: 'agent_approved', data: { name: agent.full_name } }),
-          });
-        }
-      } catch { /* non-fatal */ }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pending-profiles'] });

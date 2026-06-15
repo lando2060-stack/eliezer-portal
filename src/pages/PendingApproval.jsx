@@ -30,30 +30,11 @@ export default function PendingApproval() {
 
   const pending = expenses.filter(e => e.status === 'pending_approval');
 
-  const sendExpenseEmail = async (expense, type, reason = '') => {
-    try {
-      // מציאת המייל של הסוכן דרך agents
-      const agents = await base44.entities.Agent.filter({ id: expense.agent_id });
-      const agentEmail = agents?.[0]?.email;
-      if (!agentEmail) return;
-      await fetch('/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: agentEmail,
-          type,
-          data: { vendor: expense.vendor_name, amount: `₪${expense.total_amount}`, agentName: expense.agent_name, reason },
-        }),
-      });
-    } catch { /* non-fatal */ }
-  };
-
   const approveMutation = useMutation({
     mutationFn: (expense) => base44.entities.Expense.update(expense.id, { status: 'approved' }),
-    onSuccess: (_, expense) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
       toast.success('ההוצאה אושרה');
-      sendExpenseEmail(expense, 'expense_approved');
     },
     onError: () => toast.error('שגיאה באישור ההוצאה'),
   });
@@ -63,10 +44,9 @@ export default function PendingApproval() {
       status: 'rejected',
       ...(reason ? { notes: reason } : {}),
     }),
-    onSuccess: (_, { expense, reason }) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
       toast.success('ההוצאה נדחתה');
-      sendExpenseEmail(expense, 'expense_rejected', reason);
       setRejectTarget(null);
       setRejectReason('');
     },

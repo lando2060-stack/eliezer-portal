@@ -73,6 +73,7 @@ create table if not exists deals (
   side                     text not null default '',
   address                  text not null default '',
   deal_amount              numeric not null default 0,
+  commission_percent       numeric not null default 2,
   vat_included             boolean not null default true,
   commission_amount        numeric not null default 0,
   collection_percent       numeric not null default 100,
@@ -91,6 +92,9 @@ create table if not exists deals (
   notes                    text not null default '',
   status                   text not null default 'פתוחה'
 );
+
+-- Migration for existing DBs:
+-- alter table deals add column if not exists commission_percent numeric not null default 2;
 
 -- created_date alias (used by the app for sorting/display)
 alter table deals add column if not exists created_date timestamptz;

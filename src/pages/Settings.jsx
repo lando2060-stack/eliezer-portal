@@ -22,9 +22,6 @@ const COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#06b6d4'
 // ---- Profile Tab ----
 function ProfileTab() {
   const [user, setUser] = useState(null);
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [savingProfile, setSavingProfile] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -33,26 +30,10 @@ function ProfileTab() {
   useEffect(() => {
     let cancelled = false;
     base44.auth.me().then(u => {
-      if (!cancelled) {
-        setUser(u);
-        setFullName(u?.full_name || '');
-        setPhone(u?.phone || '');
-      }
+      if (!cancelled) setUser(u);
     }).catch(() => {});
     return () => { cancelled = true; };
   }, []);
-
-  const handleSaveProfile = async () => {
-    setSavingProfile(true);
-    try {
-      await base44.auth.updateMe({ phone, full_name: fullName });
-      toast.success('הפרטים נשמרו');
-    } catch {
-      toast.error('שגיאה בשמירה');
-    } finally {
-      setSavingProfile(false);
-    }
-  };
 
   const handleChangePassword = async () => {
     if (newPassword !== confirmPassword) { toast.error('הסיסמאות אינן תואמות'); return; }
@@ -72,28 +53,6 @@ function ProfileTab() {
 
   return (
     <div className="space-y-4 max-w-lg">
-      {/* User Info */}
-      <Card className="rounded-2xl">
-        <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><User className="w-4 h-4" /> פרטי משתמש</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-1">
-            <Label className="text-xs">שם מלא</Label>
-            <Input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="שם מלא" className="rounded-xl" />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">אימייל</Label>
-            <p className="font-medium text-sm text-muted-foreground">{user?.email || '-'}</p>
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">טלפון</Label>
-            <Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="050-0000000" className="rounded-xl" />
-          </div>
-          <Button onClick={handleSaveProfile} disabled={savingProfile} className="rounded-xl gap-2">
-            שמור פרטים
-          </Button>
-        </CardContent>
-      </Card>
-
       {/* Change Password */}
       <Card className="rounded-2xl">
         <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><KeyRound className="w-4 h-4" /> החלפת סיסמה</CardTitle></CardHeader>
@@ -622,14 +581,6 @@ function AgentPermissionsTab() {
         });
         if (agentError) throw agentError;
       }
-
-      try {
-        await fetch('/api/send-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: profile.email, type: 'agent_approved', data: { name: profile.full_name } }),
-        });
-      } catch { /* non-fatal */ }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pending-profiles'] });
